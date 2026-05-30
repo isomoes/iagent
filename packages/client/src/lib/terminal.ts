@@ -166,6 +166,37 @@ function canvasReadbackTampered(): boolean {
   }
 }
 
+/**
+ * Scrollback keymap — the kitty `scroll_page_up`/`scroll_line_up` family ported
+ * to xterm's viewport API. Returns true if the chord was a scroll gesture (and
+ * has been applied), so the caller knows to swallow it instead of forwarding the
+ * encoded cursor key to the PTY:
+ *
+ *   Shift+Up   -> scroll_page_up      Ctrl+Up   -> scroll_line_up
+ *   Shift+Down -> scroll_page_down    Ctrl+Down -> scroll_line_down
+ *
+ * Exactly-one-modifier match (Shift xor Ctrl, no Alt/Meta) keeps these from
+ * colliding with other chords the agent may want. xterm clamps the scroll at the
+ * buffer edges, and on the alternate screen (no scrollback) the calls no-op.
+ */
+function handleScrollback(term: Terminal, e: KeyboardEvent): boolean {
+  if (e.altKey || e.metaKey) return false;
+  const shift = e.shiftKey && !e.ctrlKey;
+  const ctrl = e.ctrlKey && !e.shiftKey;
+  if (!shift && !ctrl) return false;
+  if (e.key === 'ArrowUp') {
+    if (shift) term.scrollPages(-1);
+    else term.scrollLines(-1);
+    return true;
+  }
+  if (e.key === 'ArrowDown') {
+    if (shift) term.scrollPages(1);
+    else term.scrollLines(1);
+    return true;
+  }
+  return false;
+}
+
 const TERMINAL_OPTIONS: ITerminalOptions = {
   // Pure-passthrough renderer (ARCH roadmap stage 1): the agent's TUI is our UI.
   allowProposedApi: true,
@@ -217,7 +248,18 @@ class XtermTerminal implements TerminalHandle {
     // receives a literal Tab while focused. Shift+Tab is deliberately NOT taken
     // (it stays Claude Code's mode-cycle); every other key, Esc among them,
     // passes straight through. Returning true = let xterm handle the key.
+    //
+    // Scrollback navigation (the kitty `map shift+up scroll_page_up` family):
+    // Shift+Up/Down page the scrollback, Ctrl+Up/Down nudge it a line. We catch
+    // them BEFORE xterm encodes them as cursor-key bytes, scroll the viewport,
+    // and swallow them so the agent never sees a stray arrow. NOTE: this steals
+    // these four chords from the PTY, and the alternate screen buffer (full-
+    // screen TUIs) keeps no scrollback, so there scrolling is a harmless no-op.
     term.attachCustomKeyEventHandler((e) => {
+      if (e.type === 'keydown' && handleScrollback(term, e)) {
+        e.preventDefault(); // we handled it; don't let xterm encode a key byte
+        return false; // do NOT forward to the PTY
+      }
       if (
         e.type === 'keydown' &&
         e.key === 'Tab' &&
