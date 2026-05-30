@@ -24,6 +24,10 @@
   const { sessionId }: Props = $props();
 
   let host = $state<HTMLDivElement | null>(null);
+  // Non-editable, focusable (tabindex=-1) leave target: focusing it on the Tab
+  // gesture drops a page-level Vim extension out of insert mode at once (see
+  // term.onLeave below / ARCH §Focus).
+  let viewEl = $state<HTMLDivElement | null>(null);
   let exitInfo = $state<ExitMsg | null>(null);
 
   const RESIZE_DEBOUNCE_MS = 150;
@@ -58,6 +62,16 @@
     };
     el.addEventListener('focus', refocusTerminal);
     el.addEventListener('click', refocusTerminal);
+
+    // Tab "leave" gesture: focus the (non-editable) panel container so a
+    // page-level Vim extension drops out of insert mode at once — a bare blur
+    // does not, wasting the first key (ARCH §Focus). viewEl is read at call
+    // time, so its binding order relative to this effect does not matter.
+    term.onLeave(() => {
+      if (disposed) return;
+      if (viewEl) viewEl.focus();
+      else term.blur();
+    });
 
     const ws = new WsClient(sessionWsUrl(id), id, {
       onData(bytes) {
@@ -151,7 +165,7 @@
   });
 </script>
 
-<div class="terminal-view">
+<div class="terminal-view" bind:this={viewEl} tabindex="-1">
   <!-- tabindex + role make the host a real, hint-discoverable focus target so a
        page-level Vim extension's `f` and native Tab can return focus to the
        terminal after Esc (ARCH §Focus & browser keyboard extensions). The
@@ -178,6 +192,11 @@
     height: 100%;
     min-height: 0;
     background: #0b0e14;
+  }
+  /* It is only focusable (tabindex=-1) to be the Tab "leave" target; never show
+     a ring for that programmatic focus. */
+  .terminal-view:focus {
+    outline: none;
   }
   .terminal-host {
     flex: 1 1 auto;

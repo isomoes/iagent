@@ -187,58 +187,58 @@ racing the extension from inside the page (which we'd lose):
   *not* to trap `Esc` in insert mode on the iagent origin (see snippet). This is the one piece the
   app cannot enforce itself — a content script's capture listener fires before any in-page handler.
 - **`Tab` is the deliberate "leave" gesture.** Plain `Tab` is intercepted in xterm's
-  `attachCustomKeyEventHandler` (`terminal.ts`) — `preventDefault()` + `term.blur()` *before* it
-  becomes a `\t` byte — handing control back to the extension's normal mode. Explicitly **not `Esc`**
-  (the agent's) and **not `Ctrl-Q`** (that is XON `0x11` to the tty *and* the browser-quit shortcut
-  on Linux, which a content script can't reliably override). Trade-off: while focused the agent no
-  longer receives a literal `Tab`; `Shift+Tab` is left untouched (it stays Claude Code's mode-cycle),
-  and every other key — `Esc` among them — passes straight through.
+  `attachCustomKeyEventHandler` (`terminal.ts`) *before* it becomes a `\t` byte; it `preventDefault()`s
+  and then moves focus to the **non-editable panel container** (`.terminal-view`, `tabindex=-1`) via
+  the `onLeave` handler. The focus move matters: a Vim extension leaves insert mode only when a
+  *non-editable* element gains focus, **not** on a bare `blur()` — so a plain blur would leave it in
+  insert mode and the first post-Tab keystroke (e.g. `f`) would be wasted exiting insert instead of
+  acting. Explicitly **not `Esc`** (the agent's) and **not `Ctrl-Q`** (that is XON `0x11` to the tty
+  *and* the browser-quit shortcut on Linux, which a content script can't reliably override).
+  Trade-off: while focused the agent no longer receives a literal `Tab`; `Shift+Tab` is left untouched
+  (it stays Claude Code's mode-cycle), and every other key — `Esc` among them — passes straight through.
 
 **Rule — own the re-entry affordance; do not hack xterm internals.**
 
-- The terminal panel exposes a **visible, focusable, hint-discoverable** re-entry target:
-  `tabindex="0"` + `role="textbox"` on `.terminal-host`, a `click`/`focus` handler that calls
-  `term.focus()`, and a visible focus ring. A real, on-screen, non-zero-area, focusable element is
-  reliably hinted by `f` and reachable by native `Tab`; the hint (or a click, or `Tab`+`Enter`) then
-  forwards focus into the hidden textarea via `term.focus()`.
-- **Do not** restyle `.xterm-helper-textarea` to make `i` discover it — giving the textarea real
-  geometry breaks xterm's IME/cursor positioning and is fragile across `@xterm` releases. `i`
-  (editable-only detection) is not a reliable re-entry path here; `f`, click, and `Tab` are.
+- The terminal panel is a **visible, focusable, hint-discoverable** re-entry target: `tabindex="0"`
+  **+ `role="textbox"`** on `.terminal-host`, a `click`/`focus` handler that calls `term.focus()`, and
+  a visible focus ring. This one affordance makes re-entry work from *both* sides:
+  - `f` (link hints) and native `Tab` land on it — it is on-screen, focusable, non-zero-area;
+  - **`i` (Surfingkeys "Go to edit box") lands on it too** — `getCssSelectorsOfEditable()` includes
+    `*[role=textbox]` (`hints.js`/`utils.js`), so the role tag makes `.terminal-host` an editable-hint
+    target. The hidden textarea stays invisible to hints; the visible host is the proxy, and
+    activating it forwards focus into the textarea via `term.focus()`. Caveat: the built-in `i` is a
+    *hints* command (`createHintsForClick` has no single-element shortcut), so it costs **two taps**
+    (`i`, then the hint key) — the snippet remaps `i` to a one-tap direct focus on this origin.
+- **Do not** restyle `.xterm-helper-textarea` to make hints discover *it* — giving the textarea real
+  geometry breaks xterm's IME/cursor positioning and is fragile across `@xterm` releases. The
+  `role="textbox"` proxy is what makes `i`/`f` work without touching xterm internals.
 
-**Be friendly to Surfingkeys (and siblings) — ship a per-origin snippet.** Because the extension's
-mode can't be driven from page code, the README documents a drop-in `~/.surfingkeys.js` for the
-iagent origin that must do three things:
+**Be friendly to Surfingkeys (and siblings) — ship a per-origin snippet.** The visible
+`role="textbox"` affordance already makes `f`/`i`/`Tab` *find* the terminal; the drop-in
+`~/.surfingkeys.js` (full version in the README) tunes the three remaining ergonomics page code can't:
 
-1. **Re-entry key** — map a key (e.g. `t`) to `.focus()` the terminal; a mapped callback can focus
-   the hidden textarea *programmatically* even though hints can't *see* it (below).
-2. **Auto-insert on terminal focus** — on `focusin` of `.xterm-helper-textarea`, dispatch a synthetic
+1. **Auto-insert on terminal focus** — on `focusin` of `.xterm-helper-textarea`, dispatch a synthetic
    `mousedown` (Surfingkeys' mousedown handler runs `insert.enter`, bypassing the first-keystroke
    blur) so a freshly auto-focused session is typable without pressing `i`.
-3. **Don't exit insert on `Esc`** — `iunmap('<Esc>')` for the origin, so in Insert mode `Esc`
-   propagates to the textarea → the agent (the terminal owns it while focused).
+2. **Don't exit insert on `Esc`** — `iunmap('<Esc>')` for the origin. `iunmap` touches **insert mode
+   only**, which is active only while an editable (here, the terminal) is focused — so `Esc` reaches
+   the agent when focused yet still works normally in Surfingkeys when the terminal is *blurred*. It
+   is **not** a global `Esc` kill. (Confirmed in `mode.js`: with no pending multi-key, `Mode.finish`
+   returns false, so a removed insert `<Esc>` mapping lets the key propagate to the textarea.)
+3. **One-tap re-entry** — remap `i` on the origin to focus `.terminal-host` directly, since the
+   built-in `i` is a two-tap hints command (above). The terminal is the only edit box on the page, so
+   overriding `i` here loses nothing.
 
-> Source-verified against Surfingkeys (`normal.js`, `insert.js`, `api.js`); the working snippet lives
-> in the README. NB: `Normal.passThrough()` is the *wrong* lever — it exits on `Esc`, so it would eat
-> the very key we are reserving for the agent. Re-verify against the installed version before relying
-> on it; extension internals shift between releases.
+> Source-verified against Surfingkeys (`normal.js`, `insert.js`, `hints.js`, `mode.js`, `api.js`). NB:
+> `Normal.passThrough()` is the *wrong* lever for `Esc` — it exits on `Esc`, eating the very key we
+> reserve for the agent. Re-verify against the installed version; extension internals shift between
+> releases.
 
-The re-entry mapping itself is straightforward:
-
-```js
-// ~/.surfingkeys.js — make iagent friendly
-const onIagent = /^https?:\/\/(localhost|127\.0\.0\.1)/;
-// One key to drop back into the terminal (works regardless of textarea visibility):
-mapkey('t', 'iagent: focus terminal', () => {
-  (document.querySelector('.terminal-host') || document.querySelector('.xterm-helper-textarea'))?.focus();
-}, { domain: onIagent });
-// Optional: stay out of the way entirely on this origin.
-// unmapAllExcept(['t'], onIagent);
-```
-
-> The app guarantees the **structural** half — a focusable `.terminal-host` that `f`/`Tab` can target
-> and that forwards to `term.focus()`; the extension config is the **ergonomic** half — one re-entry
-> key, or a per-site passthrough. Neither side fights the other: the terminal never globally swallows
-> keys, and the extension is told where the terminal is.
+> The app guarantees the **structural** half — a focusable `.terminal-host[role=textbox]` that
+> `f`/`i`/`Tab` target and that forwards to `term.focus()`, plus a non-editable `.terminal-view`
+> leave-target so `Tab` drops the extension to normal mode; the extension config is the **ergonomic**
+> half — auto-insert on focus, `Esc` passthrough, and one-tap `i`. Neither side fights the other: the
+> terminal never globally swallows keys, and the extension is told where the terminal is.
 
 ## Security
 

@@ -64,6 +64,14 @@ export interface TerminalHandle {
   focus(): void;
   /** Move focus OUT of the terminal (the Tab "leave" gesture, see mount). */
   blur(): void;
+  /**
+   * Register what happens on the Tab "leave" gesture. The handler should move
+   * focus to a NON-editable element: a page-level Vim extension (Surfingkeys)
+   * only drops out of insert mode when a non-editable element gains focus, not
+   * on a bare blur — so without this the first post-Tab keystroke is wasted
+   * exiting insert mode (ARCH §Focus). Falls back to blur() if unset.
+   */
+  onLeave(cb: () => void): void;
   /** Tear down: dispose addons + terminal, freeing the WebGL context. */
   dispose(): void;
 }
@@ -220,6 +228,8 @@ class XtermTerminal implements TerminalHandle {
   private canvas: CanvasAddon | null = null;
   private serializeAddon: SerializeAddon | null = null;
   private disposed = false;
+  /** Handler for the Tab "leave" gesture; see onLeave / mount. */
+  private leaveHandler: (() => void) | null = null;
   /** Teardown callbacks for listeners registered in mount() (dpr watch, etc). */
   private cleanups: Array<() => void> = [];
   /** Pending debounced atlas-refresh timer + its hard deadline (epoch ms). */
@@ -242,9 +252,11 @@ class XtermTerminal implements TerminalHandle {
     // While the terminal is focused it owns the WHOLE keyboard — Esc included,
     // so the agent (Claude Code) gets Esc to interrupt/dismiss. The deliberate
     // "leave the terminal" gesture is plain Tab: we intercept it HERE, before
-    // xterm encodes it as a \t byte, and blur instead — handing control to any
-    // page-level Vim extension (Surfingkeys), which can then return focus via
-    // an `f` hint / native Tab / the `t` mapping. Cost: the agent no longer
+    // xterm encodes it as a \t byte, and hand off via the leave handler — which
+    // moves focus to a non-editable element so a page-level Vim extension
+    // (Surfingkeys) drops out of insert mode AT ONCE (a bare blur leaves it in
+    // insert mode, wasting the first key; ARCH §Focus). The extension can then
+    // return focus via `f` / `i` / native Tab. Cost: the agent no longer
     // receives a literal Tab while focused. Shift+Tab is deliberately NOT taken
     // (it stays Claude Code's mode-cycle); every other key, Esc among them,
     // passes straight through. Returning true = let xterm handle the key.
@@ -268,8 +280,9 @@ class XtermTerminal implements TerminalHandle {
         !e.altKey &&
         !e.metaKey
       ) {
-        e.preventDefault(); // suppress native focus traversal; blur to <body>
-        term.blur();
+        e.preventDefault(); // suppress native focus traversal
+        if (this.leaveHandler) this.leaveHandler();
+        else term.blur();
         return false; // do NOT forward Tab to the PTY
       }
       return true;
@@ -480,6 +493,10 @@ class XtermTerminal implements TerminalHandle {
 
   blur(): void {
     this.term?.blur();
+  }
+
+  onLeave(cb: () => void): void {
+    this.leaveHandler = cb;
   }
 
   dispose(): void {

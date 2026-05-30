@@ -56,7 +56,7 @@ iagent shares one keyboard between the terminal and a page-level Vim extension. 
 
 - **Focused ⇒ the terminal owns every key, `Esc` included** (the agent needs `Esc` to interrupt/dismiss).
 - **`Tab` leaves** the terminal (handed back to the extension); `Shift+Tab` stays with the agent.
-- **`f` / `Tab` / `t` return** focus to the terminal.
+- **`f` / `i` / `Tab` return** focus to the terminal (the snippet remaps `i` to a one-tap focus).
 
 Two Surfingkeys quirks need a one-time `~/.surfingkeys.js` for the iagent origin — both rooted in
 xterm's input being a hidden, off-screen `<textarea>`:
@@ -72,7 +72,9 @@ xterm's input being a hidden, off-screen `<textarea>`:
 const { mapkey, iunmap } = api;
 const onIagent = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/;
 
-// (2) Esc belongs to the agent: drop insert-mode's Esc->exit on this origin.
+// (2) Esc belongs to the agent. iunmap only touches INSERT mode — which is
+//     active only while an editable (here, the terminal) is focused — so Esc
+//     still works normally in Surfingkeys when the terminal is blurred.
 iunmap('<Esc>', onIagent);
 
 // (1) Auto-enter insert mode when xterm's textarea focuses, so a freshly created
@@ -85,10 +87,12 @@ document.addEventListener('focusin', (e) => {
   }
 }, true);
 
-// Re-entry key from normal mode (Tab leaves; `t` brings you back).
-mapkey('t', 'iagent: focus terminal', () => {
-  (document.querySelector('.terminal-host') ||
-   document.querySelector('.xterm-helper-textarea'))?.focus();
+// (3) Re-entry in ONE tap. The DEFAULT `i` is a hints command (press `i`, THEN a
+//     hint key — two taps). On this origin the terminal is the only edit box, so
+//     override `i` to focus it directly (-> .terminal-host's focus handler ->
+//     term.focus() -> (1) enters insert mode). Tab leaves; `i` brings you back.
+mapkey('i', 'iagent: focus terminal', () => {
+  document.querySelector('.terminal-host')?.focus();
 }, { domain: onIagent });
 ```
 
