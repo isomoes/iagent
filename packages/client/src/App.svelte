@@ -12,31 +12,31 @@
   import StatusBar from './components/StatusBar.svelte';
   import TerminalView from './components/TerminalView.svelte';
   import { sessionStore } from './lib/sessions.svelte.js';
-  import { isDevToken } from './lib/config.js';
 
   const activeId = $derived(sessionStore.activeId);
   const active = $derived(sessionStore.active);
-  const showDevTokenWarning = isDevToken();
+
+  // The panel that holds the focused terminal; registered so the store can
+  // measure the viewport and spawn new PTYs at full size (not the 80×24 default).
+  let panelEl = $state<HTMLElement | null>(null);
 
   // Start polling the REST session list once, on mount; stop on teardown.
   $effect(() => {
     sessionStore.startPolling();
     return () => sessionStore.stopPolling();
   });
+
+  $effect(() => {
+    sessionStore.setHost(panelEl);
+    return () => sessionStore.setHost(null);
+  });
 </script>
 
 <div class="app">
-  {#if showDevTokenWarning}
-    <div class="dev-token-warning" role="alert">
-      Using the insecure dev token. Set VITE_IAGENT_TOKEN (and IAGENT_TOKEN on the server)
-      before exposing this beyond localhost.
-    </div>
-  {/if}
-
   <div class="layout">
     <SessionList />
 
-    <main class="panel">
+    <main class="panel" bind:this={panelEl}>
       {#if activeId}
         <!-- key forces unmount/remount on session switch => lazy attach. -->
         {#key activeId}
@@ -61,14 +61,6 @@
     width: 100vw;
     overflow: hidden;
     background: #0b0e14;
-  }
-  .dev-token-warning {
-    flex: 0 0 auto;
-    padding: 5px 12px;
-    font: 11px ui-monospace, monospace;
-    color: #0b0e14;
-    background: #e6b450;
-    text-align: center;
   }
   .layout {
     display: flex;

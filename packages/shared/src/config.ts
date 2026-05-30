@@ -14,8 +14,6 @@ import {
 export interface ServerConfig {
   host: string;
   port: number;
-  /** Bearer token checked on REST AND on the WS upgrade. */
-  token: string;
   /** Origin allowlist (exact match) for REST + WS upgrade. */
   allowedOrigins: string[];
 
@@ -41,9 +39,6 @@ export interface ServerConfig {
   batchBytes: number;
 }
 
-/** Loud, single-source dev-token warning string (server logs it once). */
-export const DEV_TOKEN = 'dev-token';
-
 const DEFAULT_PORT = 4517;
 const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_ALLOWED_ORIGIN = 'http://localhost:5173'; // Vite dev server
@@ -67,14 +62,11 @@ function parseListEnv(value: string | undefined, fallback: string[]): string[] {
  * Build a ServerConfig from environment (defaults to process.env).
  *
  * Env keys:
- *   PORT, HOST, IAGENT_TOKEN, IAGENT_ALLOWED_ORIGINS (comma list),
+ *   PORT, HOST, IAGENT_ALLOWED_ORIGINS (comma list),
  *   IAGENT_AGENT_CMD, IAGENT_AGENT_ARGS (comma list), IAGENT_AGENT_CWD,
  *   IAGENT_MAX_SESSIONS, IAGENT_RING_BYTES, IAGENT_TOTAL_RING_BYTES,
  *   IAGENT_IDLE_GC_MS, IAGENT_HIGH_WATERMARK, IAGENT_LOW_WATERMARK,
  *   IAGENT_BATCH_MS, IAGENT_BATCH_BYTES.
- *
- * IAGENT_TOKEN falls back to DEV_TOKEN ('dev-token'); the caller is expected
- * to emit a loud warning when that default is in effect.
  */
 export function loadConfig(
   env: Record<string, string | undefined> = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {},
@@ -85,7 +77,6 @@ export function loadConfig(
   return {
     host: env.HOST?.trim() || DEFAULT_HOST,
     port: parseIntEnv(env.PORT, DEFAULT_PORT),
-    token: env.IAGENT_TOKEN?.trim() || DEV_TOKEN,
     allowedOrigins: parseListEnv(env.IAGENT_ALLOWED_ORIGINS, [DEFAULT_ALLOWED_ORIGIN]),
 
     agentCmd: env.IAGENT_AGENT_CMD?.trim() || DEFAULT_AGENT_CMD,
@@ -104,9 +95,4 @@ export function loadConfig(
     batchMs: parseIntEnv(env.IAGENT_BATCH_MS, DEFAULT_BATCH_MS),
     batchBytes: parseIntEnv(env.IAGENT_BATCH_BYTES, DEFAULT_BATCH_BYTES),
   };
-}
-
-/** True when the effective token is the insecure dev default. */
-export function isDevToken(cfg: ServerConfig): boolean {
-  return cfg.token === DEV_TOKEN;
 }

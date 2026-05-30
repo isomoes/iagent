@@ -148,13 +148,16 @@ Lag comes from rendering, producer-overwhelm, and input latency — rarely the n
 This is effectively **remote code execution as a service** — a browser piped into an agent that
 runs arbitrary shell commands.
 
-- Bind to **localhost** by default; never expose publicly without auth.
-- `wss://` (TLS), **token/session check on the WS handshake**, origin allowlist.
+- Bind to **localhost** only — anything that can reach the port is already on the machine, so
+  there is no auth token. Do not expose the port publicly; exposing it beyond localhost would
+  require adding `wss://` (TLS) + a real auth layer first.
+- **Origin allowlist** on the WS handshake + REST (exact match) — CSRF defense for browser clients;
+  non-browser clients (curl) omit Origin and are allowed.
 - **Per-session authorization** — the handshake authenticates a *connection*; it does not entitle
   it to every session. Bind each `sessionId` to an owner (set the principal in `ws.data` at
   `server.upgrade()`) and authorize every `attach {sessionId}` against it — otherwise any
-  authenticated client can hijack any running agent (a live shell). State single- vs multi-tenant
-  explicitly; default here is single-user/localhost.
+  client can hijack any running agent (a live shell). State single- vs multi-tenant explicitly;
+  default here is single-user/localhost.
 - Idle-session timeouts; run the agent as a restricted user / container with a working-dir jail.
 
 ## Roadmap

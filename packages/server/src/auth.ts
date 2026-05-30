@@ -1,20 +1,16 @@
 // ============================================================================
 // Auth — single-user / localhost model (the ARCH default).
 //
-// Three independent checks:
-//   1. token     — IAGENT_TOKEN, presented as `Authorization: Bearer <t>` OR
-//                  `?token=<t>`. Checked on EVERY REST request and on the WS
-//                  upgrade.
-//   2. origin    — exact-match allowlist (default the Vite dev server). Browser
+// The server binds to localhost only, so there is no token: anything that can
+// reach the port is already on the machine. Two checks remain:
+//   1. origin    — exact-match allowlist (default the Vite dev server). Browser
 //                  requests carry an Origin header; non-browser clients (curl)
 //                  omit it and are allowed (CSRF is the threat here, and only a
 //                  browser attaches an Origin).
-//   3. ownership — the handshake authenticates a CONNECTION, it does NOT entitle
+//   2. ownership — the handshake authenticates a CONNECTION, it does NOT entitle
 //                  it to every session. Each session is bound to an owner
 //                  principal; authorizeAttach() re-checks it on every attach so
-//                  one authenticated client cannot hijack another's live shell.
-//
-// Comparisons use a constant-time helper so a token check can't be timed.
+//                  one client cannot hijack another's live shell.
 // ============================================================================
 
 import type { ServerConfig } from '@iagent/shared';
@@ -32,25 +28,6 @@ function timingSafeEqual(a: string, b: string): boolean {
     diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
   }
   return diff === 0;
-}
-
-/** Extract a bearer/query token from a request, or null. */
-export function extractToken(req: Request): string | null {
-  const auth = req.headers.get('authorization');
-  if (auth) {
-    const m = /^Bearer\s+(.+)$/i.exec(auth.trim());
-    if (m) return m[1] ?? null;
-  }
-  const url = new URL(req.url);
-  const q = url.searchParams.get('token');
-  return q && q.length > 0 ? q : null;
-}
-
-/** True iff the request carries the configured token. */
-export function checkToken(req: Request, cfg: ServerConfig): boolean {
-  const token = extractToken(req);
-  if (token === null) return false;
-  return timingSafeEqual(token, cfg.token);
 }
 
 /**

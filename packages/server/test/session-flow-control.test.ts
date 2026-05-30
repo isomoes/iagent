@@ -113,7 +113,6 @@ function makeCfg(over: Partial<ServerConfig> = {}): ServerConfig {
   return {
     host: '127.0.0.1',
     port: 4517,
-    token: 'test',
     allowedOrigins: [],
     agentCmd: 'fake',
     agentArgs: [],

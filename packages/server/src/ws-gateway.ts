@@ -2,8 +2,8 @@
 // WebSocket gateway — ONE socket per attached session at /ws/:sessionId.
 //
 // Upgrade (in index.ts's fetch via upgradeWs):
-//   validate token + origin + path, bind { sessionId, owner, connId } into
-//   ws.data, then server.upgrade(req, { data }). The handshake authenticates a
+//   validate origin + path, bind { sessionId, owner, connId } into ws.data,
+//   then server.upgrade(req, { data }). The handshake authenticates a
 //   CONNECTION; per-session ownership is re-checked on the attach control frame.
 //
 // websocket handlers:
@@ -25,7 +25,7 @@ import {
 import type { ServerWebSocket, Server } from 'bun';
 import type { SessionManager } from './session-manager.js';
 import type { Session, SessionSocket } from './session.js';
-import { authorizeAttach, checkOrigin, checkToken, principalFor, type Principal } from './auth.js';
+import { authorizeAttach, checkOrigin, principalFor, type Principal } from './auth.js';
 import { newConnectionId } from './ids.js';
 
 /** Bound on ws.data at upgrade time. */
@@ -71,7 +71,6 @@ export function upgradeWs(
   const sessionId = decodeURIComponent(m[1]!);
 
   if (!checkOrigin(req, cfg)) return new Response('forbidden origin', { status: 403 });
-  if (!checkToken(req, cfg)) return new Response('unauthorized', { status: 401 });
 
   const owner = principalFor(req);
 

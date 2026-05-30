@@ -2,9 +2,9 @@
 // REST management-channel client: list / create / get / kill sessions.
 //
 // The data path is the per-session WebSocket; THIS module is only the
-// lightweight control surface (GET/POST/DELETE /api/sessions). Every request
-// carries the bearer token. DTOs are the @iagent/shared contract, so the
-// server and client stay type-checked end to end.
+// lightweight control surface (GET/POST/DELETE /api/sessions). DTOs are the
+// @iagent/shared contract, so the server and client stay type-checked end to
+// end.
 // ============================================================================
 
 import type {
@@ -14,7 +14,7 @@ import type {
   ListSessionsRes,
   SessionSummary,
 } from '@iagent/shared';
-import { apiBase, getToken } from './config.js';
+import { apiBase } from './config.js';
 
 /** Thrown on a non-2xx REST response; carries the HTTP status + server message. */
 export class ApiError extends Error {
@@ -28,7 +28,6 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  headers.set('Authorization', `Bearer ${getToken()}`);
   if (init.body !== undefined) headers.set('Content-Type', 'application/json');
 
   let res: Response;

@@ -6,9 +6,9 @@
 //   GET    /api/sessions/:id    -> CreateSessionRes (single session summary)
 //   DELETE /api/sessions/:id    -> 204             (kill + remove)
 //
-// Every endpoint is behind the token check; browser requests also pass the
-// origin allowlist. Returns `undefined` when the path is not a /api/sessions
-// route so the caller can fall through to the WS upgrade / 404.
+// Browser requests must pass the origin allowlist. Returns `undefined` when the
+// path is not a /api/sessions route so the caller can fall through to the WS
+// upgrade / 404.
 // ============================================================================
 
 import type {
@@ -19,7 +19,7 @@ import type {
   ServerConfig,
 } from '@iagent/shared';
 import { SessionLimitError, type SessionManager } from './session-manager.js';
-import { checkOrigin, checkToken, principalFor } from './auth.js';
+import { checkOrigin, principalFor } from './auth.js';
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -43,9 +43,8 @@ export async function handleRest(
   const url = new URL(req.url);
   if (!url.pathname.startsWith('/api/')) return undefined;
 
-  // Auth gate (token always; origin only when a browser supplies it).
+  // Auth gate (origin only when a browser supplies it).
   if (!checkOrigin(req, cfg)) return err('forbidden origin', 403);
-  if (!checkToken(req, cfg)) return err('unauthorized', 401);
 
   const principal = principalFor(req);
 

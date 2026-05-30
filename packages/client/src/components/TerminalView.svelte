@@ -14,7 +14,7 @@
   import type { AttachedMsg, ExitMsg } from '@iagent/shared';
   import { createTerminal, type TerminalHandle } from '../lib/terminal.js';
   import { WsClient, type WsStatus } from '../lib/ws-client.js';
-  import { getToken, sessionWsUrl } from '../lib/config.js';
+  import { sessionWsUrl } from '../lib/config.js';
   import { sessionStore } from '../lib/sessions.svelte.js';
 
   interface Props {
@@ -43,7 +43,7 @@
     const term: TerminalHandle = createTerminal();
     term.mount(el);
 
-    const ws = new WsClient(sessionWsUrl(id, getToken()), id, {
+    const ws = new WsClient(sessionWsUrl(id), id, {
       onData(bytes) {
         const n = bytes.length;
         // Render-callback fires once xterm has actually rendered the bytes;

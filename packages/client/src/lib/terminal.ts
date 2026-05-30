@@ -87,6 +87,8 @@ class XtermTerminal implements TerminalHandle {
   private canvas: CanvasAddon | null = null;
   private serializeAddon: SerializeAddon | null = null;
   private disposed = false;
+  /** Teardown callbacks for listeners registered in mount() (dpr watch, etc). */
+  private cleanups: Array<() => void> = [];
 
   mount(el: HTMLElement): void {
     if (this.term) throw new Error('TerminalHandle.mount: already mounted');
@@ -110,6 +112,46 @@ class XtermTerminal implements TerminalHandle {
     // then to xterm's default DOM renderer — never crash.
     this.tryEnableWebgl();
     this.fit();
+    this.watchGlyphAtlas();
+  }
+
+  /**
+   * Guard against the WebGL/Canvas glyph-atlas "black block" bug. The GPU glyph
+   * atlas is built on first paint; if the monospace font resolves a tick later
+   * (font-stack fallback still settling) or the device-pixel-ratio changes
+   * (monitor move / browser zoom), the cached bitmaps go stale and glyphs paint
+   * as solid black rectangles. Rebuilding the atlas re-rasterizes them.
+   */
+  private watchGlyphAtlas(): void {
+    if (typeof document !== 'undefined' && document.fonts?.ready) {
+      document.fonts.ready.then(() => this.rebuildAtlas()).catch(() => {});
+    }
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      let lastDpr = window.devicePixelRatio;
+      const onResize = (): void => {
+        if (window.devicePixelRatio !== lastDpr) {
+          lastDpr = window.devicePixelRatio;
+          this.rebuildAtlas();
+        }
+      };
+      window.addEventListener('resize', onResize);
+      this.cleanups.push(() => window.removeEventListener('resize', onResize));
+    }
+  }
+
+  /** Drop the cached glyph bitmaps so the active renderer re-rasterizes them. */
+  private rebuildAtlas(): void {
+    if (this.disposed) return;
+    try {
+      this.webgl?.clearTextureAtlas();
+    } catch {
+      /* renderer gone */
+    }
+    try {
+      this.canvas?.clearTextureAtlas();
+    } catch {
+      /* renderer gone */
+    }
   }
 
   private tryEnableWebgl(): void {
@@ -210,6 +252,14 @@ class XtermTerminal implements TerminalHandle {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    for (const off of this.cleanups) {
+      try {
+        off();
+      } catch {
+        /* ignore */
+      }
+    }
+    this.cleanups = [];
     // Dispose WebGL first to release the GL context promptly, then the term.
     try {
       this.webgl?.dispose();
@@ -237,4 +287,54 @@ class XtermTerminal implements TerminalHandle {
 /** Create a fresh terminal wrapper. Call mount(el) to open it. */
 export function createTerminal(): TerminalHandle {
   return new XtermTerminal();
+}
+
+// Mirrors the .terminal-host padding (see TerminalView.svelte) so the offscreen
+// probe subtracts the same insets the live terminal will, keeping the measured
+// grid in step with the eventual fit.
+const HOST_PADDING_CSS = '6px 8px';
+
+/**
+ * Measure how many cols/rows a terminal area of `widthPx`×`heightPx` (the
+ * border-box the live `.terminal-host` will occupy) would fit, using xterm's
+ * OWN metrics so the result matches the real fit. Mounts a throwaway,
+ * offscreen Terminal + FitAddon (no WebGL — pure measurement), reads
+ * proposeDimensions(), and tears it down.
+ *
+ * Used to spawn the server PTY at the real viewport size from the start, rather
+ * than booting the agent at the 80×24 server default and resizing after attach
+ * (which makes the agent's first paint tiny). Returns null if it can't measure;
+ * callers should fall back to the server default.
+ */
+export function measureGrid(widthPx: number, heightPx: number): TerminalDimensions | null {
+  if (typeof document === 'undefined') return null;
+  if (!(widthPx > 0) || !(heightPx > 0)) return null;
+
+  const host = document.createElement('div');
+  host.style.cssText =
+    `position:fixed;left:-99999px;top:0;box-sizing:border-box;visibility:hidden;` +
+    `width:${Math.floor(widthPx)}px;height:${Math.floor(heightPx)}px;padding:${HOST_PADDING_CSS};`;
+  document.body.appendChild(host);
+
+  const term = new Terminal(TERMINAL_OPTIONS);
+  const fit = new FitAddon();
+  term.loadAddon(fit);
+  let dims: TerminalDimensions | null = null;
+  try {
+    term.open(host);
+    const proposed = fit.proposeDimensions();
+    if (proposed && proposed.cols > 0 && proposed.rows > 0) {
+      dims = { cols: proposed.cols, rows: proposed.rows };
+    }
+  } catch {
+    dims = null;
+  } finally {
+    try {
+      term.dispose();
+    } catch {
+      /* ignore */
+    }
+    host.remove();
+  }
+  return dims;
 }

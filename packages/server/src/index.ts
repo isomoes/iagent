@@ -7,20 +7,12 @@
 // OFF. (TCP_NODELAY is Bun.serve's default — no Nagle.)
 // ============================================================================
 
-import { isDevToken, loadConfig } from '@iagent/shared';
+import { loadConfig } from '@iagent/shared';
 import { SessionManager } from './session-manager.js';
 import { handleRest } from './management.js';
 import { makeWebSocketHandler, upgradeWs, type WsData } from './ws-gateway.js';
 
 const cfg = loadConfig();
-
-if (isDevToken(cfg)) {
-  console.warn(
-    '\n  ⚠  IAGENT_TOKEN is the INSECURE dev default ("dev-token").\n' +
-      '     This is effectively remote-code-execution as a service.\n' +
-      '     Set IAGENT_TOKEN to a real secret before exposing the server.\n',
-  );
-}
 
 const mgr = new SessionManager(cfg);
 mgr.startIdleGc();

@@ -10,6 +10,7 @@
 import type { CreateSessionReq, SessionSummary } from '@iagent/shared';
 import type { WsStatus } from './ws-client.js';
 import { createSession, killSession, listSessions } from './management.js';
+import { measureGrid } from './terminal.js';
 
 const POLL_INTERVAL_MS = 4000;
 
@@ -27,6 +28,13 @@ class SessionStore {
   private statusMap = $state<Record<string, WsStatus>>({});
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
+
+  /**
+   * The element the focused terminal occupies (the <main> panel). Registered by
+   * App on mount; used to measure the initial grid so a new PTY spawns at the
+   * real viewport size instead of the server's 80×24 default.
+   */
+  private hostEl: HTMLElement | null = null;
 
   /** The focused session summary, or undefined. */
   get active(): SessionSummary | undefined {
@@ -59,10 +67,36 @@ class SessionStore {
     }
   }
 
+  /** Register the panel element used to size new sessions (call once on mount). */
+  setHost(el: HTMLElement | null): void {
+    this.hostEl = el;
+  }
+
+  /**
+   * Measure the grid the focused terminal area would fit right now, so a new
+   * session's PTY can spawn at the real viewport size. Subtracts the status bar
+   * (always present at the panel's foot) from the available height; returns
+   * null if the panel isn't laid out, in which case create() falls back to the
+   * server default and the post-attach fit corrects it.
+   */
+  private measureInitialGrid(): { cols: number; rows: number } | null {
+    const host = this.hostEl;
+    if (!host) return null;
+    const statusBar = host.querySelector('.status-bar') as HTMLElement | null;
+    const width = host.clientWidth;
+    const height = host.clientHeight - (statusBar?.offsetHeight ?? 0);
+    return measureGrid(width, height);
+  }
+
   /** Create a session (REST POST), select it, and return its summary. */
   async create(req: CreateSessionReq = {}): Promise<SessionSummary | null> {
     this.loading = true;
     try {
+      // Size the PTY to the live viewport unless the caller pinned a size.
+      if (req.cols === undefined && req.rows === undefined) {
+        const grid = this.measureInitialGrid();
+        if (grid) req = { ...req, cols: grid.cols, rows: grid.rows };
+      }
       const session = await createSession(req);
       this.sessions = [...this.sessions, session];
       this.activeId = session.id; // focus it -> TerminalView opens its WS.

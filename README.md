@@ -29,7 +29,7 @@ bun install
 
 ```sh
 cp .env.example .env
-# edit .env — at minimum set IAGENT_TOKEN (and VITE_IAGENT_TOKEN to match) before exposing.
+# edit .env — all values have sane defaults. The server binds to localhost only.
 ```
 
 ## Develop
