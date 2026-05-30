@@ -87,9 +87,10 @@ client issue a new `resize`.
 One site manages many concurrent agent sessions.
 
 - `SessionManager` owns N PTY sessions keyed by ID; the UI shows a session list / tabs.
-- **Lazy attach** — only the focused tab holds a live WebSocket + WebGL context (browsers cap
-  WebGL contexts ~16/page). Background sessions keep running server-side; on re-focus the client
-  re-attaches and the server replays from the ring buffer.
+- **Lazy attach** — only the focused tab holds a live WebSocket (and, when WebGL is opted into,
+  a GL context — browsers cap WebGL contexts ~16/page; the default DOM renderer uses none).
+  Background sessions keep running server-side; on re-focus the client re-attaches and the server
+  replays from the ring buffer.
 - **Detached draining** — a detached session's PTY keeps producing (it can't be paused), so the
   ring buffer is its only sink. The buffer is bounded per session (oldest bytes dropped) with a
   total memory cap across sessions; a detached *fast* producer therefore loses old scrollback by
@@ -119,9 +120,13 @@ PTY lifecycle is **independent of the socket** (tmux-like). Closing the tab does
 
 Lag comes from rendering, producer-overwhelm, and input latency — rarely the network. Fixes:
 
-1. **WebGL renderer** — `@xterm/addon-webgl`, up to ~9× faster *frame rendering* than canvas
-   (GPU glyph atlas) — a render-rate win, distinct from the write-throughput limit in (2).
-   Canvas fallback + `onContextLoss` handling.
+1. **Renderer** — the **DOM renderer is the default**: real `<span>` text, immune to the
+   canvas-readback poisoning (privacy extensions, Brave farbling, Chrome fingerprint-defense
+   flags) that paints WebGL/Canvas glyphs as black blocks, and fast enough for passthrough TUI.
+   GPU rendering is opt-in via `?renderer=webgl` (`@xterm/addon-webgl`, up to ~9× faster *frame
+   rendering* via a GPU glyph atlas — a render-rate win, distinct from the write-throughput limit
+   in (2); Canvas fallback + `onContextLoss` handling). `?renderer=auto` probes for canvas
+   tampering and takes WebGL only when the canvas is clean.
 2. **Flow control (critical)** — `term.write()` sustains only ~5–35 MB/s on the main thread;
    fast producers overflow the buffer and freeze keystrokes. The PTY **cannot be paused**
    (§PTY backend), so backpressure is applied to the *socket*, not the producer:

@@ -3,6 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- The terminal is permanently dark and rasterizes its own glyphs into a
+         WebGL/Canvas atlas. Declare the scheme so Chrome's force-dark skips us,
+         and lock out Dark Reader (its recolouring turns every glyph into a
+         solid black block). Anti-fingerprint canvas-blocker extensions are a
+         separate cause — they must allowlist this origin. -->
+    <meta name="color-scheme" content="dark" />
+    <meta name="darkreader-lock" />
     <title>iagent</title>
   </head>
   <body>
