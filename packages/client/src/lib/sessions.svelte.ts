@@ -47,6 +47,9 @@ class SessionStore {
   }
 
   setStatus(id: string, status: WsStatus): void {
+    // No-op on unchanged status: avoids allocating a new map (and waking its
+    // reactive readers) on every repeated 'connecting'/'open' emit.
+    if (this.statusMap[id] === status) return;
     this.statusMap = { ...this.statusMap, [id]: status };
   }
 

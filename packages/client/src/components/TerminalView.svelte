@@ -11,6 +11,7 @@
   // coalesces byte-based acks back to the server (the flow-control signal).
   // ==========================================================================
 
+  import { untrack } from 'svelte';
   import type { AttachedMsg, ExitMsg } from '@iagent/shared';
   import { createTerminal, type TerminalHandle } from '../lib/terminal.js';
   import { WsClient, type WsStatus } from '../lib/ws-client.js';
@@ -111,7 +112,12 @@
     });
     ro.observe(el);
 
-    ws.connect();
+    // connect() synchronously emits onStatus -> sessionStore.setStatus, which
+    // reads AND writes the statusMap $state. Run it untracked so this effect
+    // depends ONLY on host + sessionId; otherwise the status write invalidates
+    // the effect, remounting the terminal + socket in a tight loop (a fresh
+    // WebGL context + WS per cycle, until the browser exhausts both).
+    untrack(() => ws.connect());
 
     return () => {
       disposed = true;
