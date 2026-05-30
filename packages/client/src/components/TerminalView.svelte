@@ -44,6 +44,21 @@
     const term: TerminalHandle = createTerminal();
     term.mount(el);
 
+    // Re-entry affordance (ARCH §Focus & browser keyboard extensions). xterm
+    // takes input through a hidden, zero-area helper <textarea> that page-level
+    // Vim extensions (Surfingkeys/Vimium/Tridactyl) cannot see, so after `Esc`
+    // blurs it their `f`/`i`/Tab have nothing to land on. The host is a real,
+    // visible, focusable element (tabindex/role in markup) — when it receives
+    // focus (an `f` hint's .focus(), native Tab) or a click lands on its padding,
+    // we forward into xterm via term.focus(). Attached as DOM listeners (not
+    // markup handlers) so they live and die with the terminal, add no reactive
+    // state to this effect, and never decode/swallow keys.
+    const refocusTerminal = (): void => {
+      if (!disposed) term.focus();
+    };
+    el.addEventListener('focus', refocusTerminal);
+    el.addEventListener('click', refocusTerminal);
+
     const ws = new WsClient(sessionWsUrl(id), id, {
       onData(bytes) {
         const n = bytes.length;
@@ -122,6 +137,8 @@
     return () => {
       disposed = true;
       if (resizeTimer !== null) clearTimeout(resizeTimer);
+      el.removeEventListener('focus', refocusTerminal);
+      el.removeEventListener('click', refocusTerminal);
       ro.disconnect();
       // Push our serialized screen BEFORE closing, so a later truncated
       // reconnect (this tab refocused after long background output) replays the
@@ -135,7 +152,17 @@
 </script>
 
 <div class="terminal-view">
-  <div class="terminal-host" bind:this={host}></div>
+  <!-- tabindex + role make the host a real, hint-discoverable focus target so a
+       page-level Vim extension's `f` and native Tab can return focus to the
+       terminal after Esc (ARCH §Focus & browser keyboard extensions). The
+       focus/click forwarding into xterm is wired in the $effect above. -->
+  <div
+    class="terminal-host"
+    bind:this={host}
+    tabindex="0"
+    role="textbox"
+    aria-label="Terminal"
+  ></div>
   {#if exitInfo}
     <div class="exit-banner" role="status">
       Process exited (code {exitInfo.code}{exitInfo.signal ? `, signal ${exitInfo.signal}` : ''}).
@@ -156,6 +183,15 @@
     flex: 1 1 auto;
     min-height: 0;
     padding: 6px 8px;
+  }
+  /* Visible focus ring while the terminal owns the keyboard. focus lands on
+     xterm's textarea (a descendant), so :focus-within is the real indicator;
+     :focus covers the transient instant the host itself holds focus before it
+     forwards into xterm (ARCH §Focus & browser keyboard extensions). */
+  .terminal-host:focus,
+  .terminal-host:focus-within {
+    outline: 1px solid #e6b450;
+    outline-offset: -1px;
   }
   .exit-banner {
     flex: 0 0 auto;

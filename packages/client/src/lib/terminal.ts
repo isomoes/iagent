@@ -62,6 +62,8 @@ export interface TerminalHandle {
   serialize(): string;
   /** Move focus into the terminal. */
   focus(): void;
+  /** Move focus OUT of the terminal (the Tab "leave" gesture, see mount). */
+  blur(): void;
   /** Tear down: dispose addons + terminal, freeing the WebGL context. */
   dispose(): void;
 }
@@ -204,6 +206,32 @@ class XtermTerminal implements TerminalHandle {
     term.loadAddon(serializeAddon);
     term.loadAddon(new WebLinksAddon());
     term.open(el);
+
+    // Keyboard-ownership policy (ARCH §Focus & browser keyboard extensions).
+    // While the terminal is focused it owns the WHOLE keyboard — Esc included,
+    // so the agent (Claude Code) gets Esc to interrupt/dismiss. The deliberate
+    // "leave the terminal" gesture is plain Tab: we intercept it HERE, before
+    // xterm encodes it as a \t byte, and blur instead — handing control to any
+    // page-level Vim extension (Surfingkeys), which can then return focus via
+    // an `f` hint / native Tab / the `t` mapping. Cost: the agent no longer
+    // receives a literal Tab while focused. Shift+Tab is deliberately NOT taken
+    // (it stays Claude Code's mode-cycle); every other key, Esc among them,
+    // passes straight through. Returning true = let xterm handle the key.
+    term.attachCustomKeyEventHandler((e) => {
+      if (
+        e.type === 'keydown' &&
+        e.key === 'Tab' &&
+        !e.shiftKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        !e.metaKey
+      ) {
+        e.preventDefault(); // suppress native focus traversal; blur to <body>
+        term.blur();
+        return false; // do NOT forward Tab to the PTY
+      }
+      return true;
+    });
 
     this.term = term;
     this.fitAddon = fitAddon;
@@ -406,6 +434,10 @@ class XtermTerminal implements TerminalHandle {
 
   focus(): void {
     this.term?.focus();
+  }
+
+  blur(): void {
+    this.term?.blur();
   }
 
   dispose(): void {
