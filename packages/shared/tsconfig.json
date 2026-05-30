@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // shared has no runtime deps; it is consumed as raw TS by server (bun-types)
+    // and client (DOM lib). For its OWN isolated typecheck + bun:test it runs
+    // under Bun, so bun-types supplies the WHATWG globals (TextEncoder/Decoder)
+    // and the bun:test module. This does not leak any runtime dependency.
+    "types": ["bun-types"]
+  },
+  "include": ["src/**/*.ts"]
+}

@@ -1,0 +1,51 @@
+/* ============================================================================
+   Base layout/theme. The app fills the viewport; xterm.js renders inside the
+   focused TerminalView's host. Keep this minimal — the agent's TUI is the UI.
+   ============================================================================ */
+
+:root {
+  color-scheme: dark;
+  --bg: #0b0e14;
+  --fg: #bfbdb6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+#app {
+  height: 100%;
+  width: 100%;
+}
+
+/* xterm fills its host; the host owns padding/scroll. */
+.xterm {
+  height: 100%;
+  width: 100%;
+}
+
+.xterm .xterm-viewport {
+  /* slim scrollbar that matches the theme */
+  scrollbar-width: thin;
+  scrollbar-color: #2a3140 transparent;
+}
+
+button {
+  font-family: inherit;
+}
+
+::selection {
+  background: #2d4f67;
+}

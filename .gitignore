@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+*.log
+
+# Build / cache artifacts
+.svelte-kit/
+.vite/
+*.tsbuildinfo

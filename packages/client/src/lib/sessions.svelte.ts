@@ -1,0 +1,116 @@
+// ============================================================================
+// Session store — Svelte 5 runes module ($state, NO legacy stores).
+//
+// Holds the session list (REST-sourced), the focused session id (lazy attach:
+// only the focused tab gets a live WS + terminal), and a connection-status map
+// for the StatusBar. Polls the REST list so background sessions' alive/exit
+// state stays current. Mutations go through @iagent/shared-typed management.ts.
+// ============================================================================
+
+import type { CreateSessionReq, SessionSummary } from '@iagent/shared';
+import type { WsStatus } from './ws-client.js';
+import { createSession, killSession, listSessions } from './management.js';
+
+const POLL_INTERVAL_MS = 4000;
+
+class SessionStore {
+  /** REST-sourced session list. */
+  sessions = $state<SessionSummary[]>([]);
+  /** The focused session id (the ONLY one with a live WS — lazy attach). */
+  activeId = $state<string | null>(null);
+  /** Last error surfaced from a management call (for the UI to show). */
+  error = $state<string | null>(null);
+  /** True while an initial list / create call is in flight. */
+  loading = $state(false);
+
+  /** Per-session connection status, keyed by id (svelte-reactive map). */
+  private statusMap = $state<Record<string, WsStatus>>({});
+
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+
+  /** The focused session summary, or undefined. */
+  get active(): SessionSummary | undefined {
+    const id = this.activeId;
+    return id ? this.sessions.find((s) => s.id === id) : undefined;
+  }
+
+  status(id: string): WsStatus | undefined {
+    return this.statusMap[id];
+  }
+
+  setStatus(id: string, status: WsStatus): void {
+    this.statusMap = { ...this.statusMap, [id]: status };
+  }
+
+  /** Fetch the list; preserves the active selection if it still exists. */
+  async refresh(): Promise<void> {
+    try {
+      const next = await listSessions();
+      this.sessions = next;
+      this.error = null;
+      // Keep focus valid; if the active session vanished, fall back to first.
+      if (this.activeId && !next.some((s) => s.id === this.activeId)) {
+        this.activeId = next[0]?.id ?? null;
+      } else if (!this.activeId && next.length > 0) {
+        this.activeId = next[0]?.id ?? null;
+      }
+    } catch (e) {
+      this.error = (e as Error).message;
+    }
+  }
+
+  /** Create a session (REST POST), select it, and return its summary. */
+  async create(req: CreateSessionReq = {}): Promise<SessionSummary | null> {
+    this.loading = true;
+    try {
+      const session = await createSession(req);
+      this.sessions = [...this.sessions, session];
+      this.activeId = session.id; // focus it -> TerminalView opens its WS.
+      this.error = null;
+      return session;
+    } catch (e) {
+      this.error = (e as Error).message;
+      return null;
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  /** Kill a session (REST DELETE) and drop it from the list. */
+  async kill(id: string): Promise<void> {
+    try {
+      await killSession(id);
+    } catch (e) {
+      this.error = (e as Error).message;
+    }
+    this.sessions = this.sessions.filter((s) => s.id !== id);
+    const { [id]: _removed, ...rest } = this.statusMap;
+    void _removed;
+    this.statusMap = rest;
+    if (this.activeId === id) {
+      this.activeId = this.sessions[0]?.id ?? null;
+    }
+  }
+
+  /** Focus a session (lazy attach: TerminalView opens/closes WS on change). */
+  select(id: string): void {
+    if (this.activeId !== id) this.activeId = id;
+  }
+
+  /** Begin polling the REST list (call once on app mount). */
+  startPolling(): void {
+    if (this.pollTimer !== null) return;
+    void this.refresh();
+    this.pollTimer = setInterval(() => void this.refresh(), POLL_INTERVAL_MS);
+  }
+
+  stopPolling(): void {
+    if (this.pollTimer !== null) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
+  }
+}
+
+/** Singleton session store shared across the component tree. */
+export const sessionStore = new SessionStore();
