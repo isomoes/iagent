@@ -22,7 +22,8 @@
     "iagent": "dist/iagent.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "engines": {
     "bun": ">=1.3.5"
