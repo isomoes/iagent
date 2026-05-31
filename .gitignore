@@ -7,3 +7,4 @@ dist/
 .svelte-kit/
 .vite/
 *.tsbuildinfo
+/.claude/worktrees

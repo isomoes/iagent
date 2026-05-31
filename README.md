@@ -34,7 +34,13 @@ cp .env.example .env
 
 ## Develop
 
-Run the two dev servers in separate terminals:
+Run both dev servers concurrently with a single command:
+
+```sh
+bun run dev          # starts server + client together (interleaved output)
+```
+
+Or run them individually in separate terminals:
 
 ```sh
 bun run dev:server   # Bun.serve on http://127.0.0.1:4517 (REST + /ws/:id), --watch
