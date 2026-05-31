@@ -5,6 +5,13 @@ All notable changes to this project are recorded here.
 Format per entry: `<type>: <commit message> (@who) <hash>`
 Entries are grouped by package version.
 
+## 0.1.1
+
+- docs: Add @isomoes/iagent package README for the npm page (@isomoes) cf4bd04
+- chore: Pin @isomoes/iagent publish registry to npmjs.org (@isomoes) 6a30ffe
+- feat: Publish @isomoes/iagent as an npx-runnable CLI (@isomoes) b300ef7
+- docs: Add CHANGELOG.md grouped by package version (0.1.0) (@isomoes) afc9a47
+
 ## 0.1.0
 
 - feat: Add concurrent `bun run dev` for server + client (@isomoes) e5c8d10
