@@ -20,9 +20,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 // The client build is copied next to this bin at dist/public during `build.ts`.
 process.env.IAGENT_PUBLIC_DIR ||= join(here, 'public');
 
-// The UI is now same-origin with the API/WS, so a browser's requests carry the
-// server's own Origin. Trust localhost + 127.0.0.1 on the bound port by default.
-const port = process.env.PORT?.trim() || '4517';
-process.env.IAGENT_ALLOWED_ORIGINS ||= `http://localhost:${port},http://127.0.0.1:${port}`;
+// The UI is same-origin with the API/WS, so a browser's requests carry the
+// server's own Origin. startServer() trusts its ACTUAL bound origin (localhost +
+// 127.0.0.1 on whatever port it lands on — including the random free port it
+// falls back to when the default port is busy), so there's no port to guess here.
 
 startServer();
