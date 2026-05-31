@@ -1,12 +1,16 @@
 <script lang="ts">
   // ==========================================================================
   // StatusBar — connection status (connecting/open/reconnecting/closed), the
-  // session's PTY size, agent, and exit code for the focused session.
+  // session's PTY size, agent, and exit code for the focused session, plus the
+  // iagent version (always shown, far right).
   // ==========================================================================
 
   import type { SessionSummary } from '@iagent/shared';
   import { sessionStore } from '../lib/sessions.svelte.js';
   import type { WsStatus } from '../lib/ws-client.js';
+
+  // Inlined at build time from package.json (see vite.config.ts).
+  const version = __APP_VERSION__;
 
   interface Props {
     session: SessionSummary | undefined;
@@ -38,6 +42,7 @@
   {:else}
     <span class="seg">no session</span>
   {/if}
+  <span class="seg version" title="iagent version">v{version}</span>
 </footer>
 
 <style>
@@ -73,5 +78,11 @@
   }
   .seg.exit {
     color: #f07178;
+  }
+  /* Always far-right: pushes off the first auto-margin (the id seg) when a
+     session is shown, and right-aligns itself in the no-session case. */
+  .seg.version {
+    margin-left: auto;
+    color: #3d4654;
   }
 </style>
