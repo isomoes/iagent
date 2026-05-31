@@ -1,32 +1,43 @@
-# Cut a GitHub Release when a vX.Y.Z tag is pushed, using the matching section
-# of CHANGELOG.md as the release body.
+# Cut a GitHub Release from CHANGELOG.md — but only after the npm publish has
+# actually succeeded.
 #
-# Runs on the same push as publish.yml (which does the npm publish) — they are
-# independent. The release is created with the default GITHUB_TOKEN; that is
-# fine because nothing downstream keys off the `release:` event (publish.yml is
-# triggered by the tag too, not by this release).
+# Chained off publish.yml via `workflow_run` (NOT the tag) so a failed publish
+# never leaves behind a GitHub Release for a version that isn't on npm. The tag
+# push triggers publish.yml; when that run completes successfully this fires.
+#
+# `workflow_run` always uses the workflow definition from the default branch, so
+# this file must be on the default branch to take effect (it is). The tag name
+# and commit come from the upstream run via `github.event.workflow_run.*`.
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_run:
+    workflows: ["Publish"]
+    types:
+      - completed
 
 permissions:
   contents: write # create GitHub Releases
 
 jobs:
   release:
+    # Only when the publish succeeded, and only for tag pushes (head_branch is
+    # the tag name, e.g. v0.1.2, for a tag-triggered upstream run).
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       # Pull the block under `## <version>` (up to the next `## `) out of the
       # changelog. Falls back to GitHub's auto-generated notes if absent.
       - name: Extract changelog notes
         id: notes
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ github.event.workflow_run.head_branch }}
         run: |
           VERSION="${TAG#v}"
           NOTES="$RUNNER_TEMP/notes.md"
@@ -47,7 +58,7 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ github.event.workflow_run.head_branch }}
           FOUND: ${{ steps.notes.outputs.found }}
           FILE: ${{ steps.notes.outputs.file }}
         run: |

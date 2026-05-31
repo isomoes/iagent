@@ -4,15 +4,16 @@ Cut a new release of iagent. Follow this exactly; it matches how `0.1.1` was rel
 
 ## How releases work (context)
 
-A release is driven entirely by pushing a `vX.Y.Z` git tag. Two GitHub Actions fire on
-the tag push (`.github/workflows/`), independently of each other:
+A release is driven entirely by pushing a `vX.Y.Z` git tag. The two GitHub Actions
+(`.github/workflows/`) run as a **chained pipeline**:
 
-- **publish.yml** — stamps `packages/cli` version from the tag (`vX.Y.Z` → `X.Y.Z`),
-  runs `bun run typecheck`, then `npm publish --provenance` of `@isomoes/iagent` via npm
-  OIDC **trusted publishing** (no `NPM_TOKEN`). The publish runs `prepack` (`bun run build.ts`)
-  to produce `dist/`.
-- **release.yml** — extracts the `## X.Y.Z` block from `CHANGELOG.md` and cuts a GitHub
-  Release with it as the body (falls back to auto-generated notes if the section is missing).
+- **publish.yml** (triggered by the tag) — stamps `packages/cli` version from the tag
+  (`vX.Y.Z` → `X.Y.Z`), runs `bun run typecheck`, then `npm publish --provenance` of
+  `@isomoes/iagent` via npm OIDC **trusted publishing** (no `NPM_TOKEN`). The publish runs
+  `prepack` (`bun run build.ts`) to produce `dist/`.
+- **release.yml** (triggered by publish.yml completing via `workflow_run`, **not** the tag) —
+  only runs if the publish **succeeded**; extracts the `## X.Y.Z` block from `CHANGELOG.md`
+  and cuts a GitHub Release with it as the body. A failed publish therefore leaves no Release.
 
 So the agent's job is only: bump versions, write the changelog section, commit, tag, push.
 
@@ -37,7 +38,7 @@ Let `X.Y.Z` be the new version (decide the bump from the commits: feat → minor
 3. **Add a `## X.Y.Z` section to `CHANGELOG.md`** directly above the previous version section.
    Format per line: `- <type>: <commit message> (@who) <hash>`, newest commit first.
    Map the emoji prefix of each commit to a type:
-   `✨ feat` · `🐛 fix` · `📝 docs` · `🔧 chore` · `🔒 security` · `♻️ refactor` · `⚡ perf` · `✅ test`.
+   `✨ feat` · `🐛 fix` · `📝 docs` · `🔧 chore` · `👷 ci` · `🔒 security` · `♻️ refactor` · `⚡ perf` · `✅ test`.
    Strip the emoji from the message text. Skip purely-mechanical commits if noise (use judgement).
 
 4. **Gate on typecheck** (publish.yml will fail otherwise):
@@ -67,13 +68,15 @@ Let `X.Y.Z` be the new version (decide the bump from the commits: feat → minor
 
 ## If a release needs to be re-cut (publish failed after tag push)
 
-If **Publish** failed but the tag/Release already exist (e.g. a CI bug), and npm never got the
-version (`npm view @isomoes/iagent versions`), fix the cause, then move the tag onto the fix:
+Because release.yml chains off a *successful* publish, a failed Publish leaves only the tag —
+no GitHub Release, and nothing on npm (`npm view @isomoes/iagent versions` to confirm). Easiest
+recovery is to bump to the next patch and release again (a skipped npm version number is fine).
+If you instead want to reuse the same version, fix the cause, then move the tag onto the fix:
 ```
-git commit ...                       # the fix
-gh release delete vX.Y.Z --yes --cleanup-tag   # drop release + remote tag
-git tag -d vX.Y.Z && git tag -a vX.Y.Z -m vX.Y.Z   # re-tag on the fixed commit
-git push origin main && git push origin vX.Y.Z     # re-triggers both workflows
+git commit ...                                       # the fix
+git push origin :vX.Y.Z && git tag -d vX.Y.Z         # drop remote + local tag
+git tag -a vX.Y.Z -m vX.Y.Z                          # re-tag on the fixed commit
+git push origin main && git push origin vX.Y.Z       # re-triggers publish → release
 ```
 
 ## Notes

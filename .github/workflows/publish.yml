@@ -1,9 +1,9 @@
 # Publish @isomoes/iagent to npm when a vX.Y.Z tag is pushed.
 #
-# Triggered directly by the tag (not the GitHub Release event) so it needs no
-# PAT: a Release created by release.yml via the default GITHUB_TOKEN would not
-# re-trigger a `release:`-keyed workflow. release.yml runs on the same push to
-# cut the GitHub Release from CHANGELOG.md — the two are independent.
+# This is the entry point of the release pipeline: the tag triggers this, and
+# release.yml chains off it via `workflow_run` to cut the GitHub Release only
+# after this publish succeeds. So a failed publish never produces a Release for
+# a version that isn't on npm.
 #
 # Auth is npm "trusted publishing" via OIDC — no NPM_TOKEN secret. One-time setup
 # on npmjs.com (Package settings → Trusted publishing) must register:
