@@ -54,11 +54,14 @@ jobs:
         run: bun run typecheck
 
       # Stamp the package version from the pushed tag (vX.Y.Z -> X.Y.Z).
+      # `npm pkg set` is a pure package.json edit; `npm version` would try to
+      # reconcile the dependency tree and dies on the `workspace:*` devDeps
+      # (npm doesn't understand Bun's workspace protocol run standalone here).
       - name: Set version from tag
         working-directory: packages/cli
         env:
           TAG: ${{ github.ref_name }}
-        run: npm version "${TAG#v}" --no-git-tag-version --allow-same-version
+        run: npm pkg set version="${TAG#v}"
 
       # `npm publish` runs the package's prepack (bun run build.ts) to produce
       # dist/, then publishes. No token: OIDC supplies short-lived credentials
