@@ -16,6 +16,13 @@ export interface ServerConfig {
   port: number;
   /** Origin allowlist (exact match) for REST + WS upgrade. */
   allowedOrigins: string[];
+  /**
+   * Directory of pre-built client assets to serve for non-API/WS routes.
+   * Empty disables static serving (the dev default — Vite serves the UI). The
+   * packaged CLI points this at its bundled client build so a single process
+   * serves both the UI and the API/WS from one origin.
+   */
+  publicDir: string;
 
   // Agent spawn defaults (pluggable; overridable per CreateSessionReq).
   agentCmd: string;
@@ -62,7 +69,7 @@ function parseListEnv(value: string | undefined, fallback: string[]): string[] {
  * Build a ServerConfig from environment (defaults to process.env).
  *
  * Env keys:
- *   PORT, HOST, IAGENT_ALLOWED_ORIGINS (comma list),
+ *   PORT, HOST, IAGENT_ALLOWED_ORIGINS (comma list), IAGENT_PUBLIC_DIR,
  *   IAGENT_AGENT_CMD, IAGENT_AGENT_ARGS (comma list), IAGENT_AGENT_CWD,
  *   IAGENT_MAX_SESSIONS, IAGENT_RING_BYTES, IAGENT_TOTAL_RING_BYTES,
  *   IAGENT_IDLE_GC_MS, IAGENT_HIGH_WATERMARK, IAGENT_LOW_WATERMARK,
@@ -78,6 +85,7 @@ export function loadConfig(
     host: env.HOST?.trim() || DEFAULT_HOST,
     port: parseIntEnv(env.PORT, DEFAULT_PORT),
     allowedOrigins: parseListEnv(env.IAGENT_ALLOWED_ORIGINS, [DEFAULT_ALLOWED_ORIGIN]),
+    publicDir: env.IAGENT_PUBLIC_DIR?.trim() || '',
 
     agentCmd: env.IAGENT_AGENT_CMD?.trim() || DEFAULT_AGENT_CMD,
     agentArgs: parseListEnv(env.IAGENT_AGENT_ARGS, []),

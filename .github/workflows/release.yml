@@ -1,0 +1,58 @@
+# Cut a GitHub Release when a vX.Y.Z tag is pushed, using the matching section
+# of CHANGELOG.md as the release body.
+#
+# Runs on the same push as publish.yml (which does the npm publish) — they are
+# independent. The release is created with the default GITHUB_TOKEN; that is
+# fine because nothing downstream keys off the `release:` event (publish.yml is
+# triggered by the tag too, not by this release).
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # create GitHub Releases
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pull the block under `## <version>` (up to the next `## `) out of the
+      # changelog. Falls back to GitHub's auto-generated notes if absent.
+      - name: Extract changelog notes
+        id: notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          NOTES="$RUNNER_TEMP/notes.md"
+          awk -v hdr="## ${VERSION}" '
+            $0 == hdr { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > "$NOTES"
+          sed -i -e '/./,$!d' "$NOTES" # strip leading blank lines
+          if grep -q '[^[:space:]]' "$NOTES"; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No '## ${VERSION}' section in CHANGELOG.md — using auto-generated notes."
+          fi
+          echo "file=$NOTES" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          FOUND: ${{ steps.notes.outputs.found }}
+          FILE: ${{ steps.notes.outputs.file }}
+        run: |
+          if [ "$FOUND" = "true" ]; then
+            gh release create "$TAG" --title "$TAG" --notes-file "$FILE" --verify-tag
+          else
+            gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag
+          fi

@@ -114,6 +114,7 @@ function makeCfg(over: Partial<ServerConfig> = {}): ServerConfig {
     host: '127.0.0.1',
     port: 4517,
     allowedOrigins: [],
+    publicDir: '',
     agentCmd: 'fake',
     agentArgs: [],
     agentCwd: '.',

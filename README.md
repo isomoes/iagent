@@ -4,6 +4,36 @@ A web UI that hosts a terminal coding agent (Claude Code / Codex CLI). The agent
 on the server (`Bun.Terminal`), its renderer lives in the browser (`@xterm/xterm` + WebGL), and a
 WebSocket is the wire. See [`ARCH.md`](./ARCH.md) for the full architecture.
 
+## Run it
+
+The published CLI bundles the server **and** the pre-built UI into one process that
+serves everything from a single origin:
+
+```sh
+npx @isomoes/iagent      # or: bunx @isomoes/iagent
+```
+
+Then open <http://127.0.0.1:4517>.
+
+Requirements:
+
+- **Bun ≥ 1.3.5** on your `PATH` — iagent is Bun-native (`Bun.Terminal` is POSIX-only),
+  so the bin runs under Bun even when launched with `npx` (via its `#!/usr/bin/env bun`
+  shebang). No Bun yet? `npm i -g bun`, or see [bun.sh](https://bun.sh).
+- The agent CLI it spawns — by default `claude` (Claude Code). Override with `IAGENT_AGENT_CMD`.
+
+All config is env vars (all optional):
+
+| Env | Default | What |
+| --- | --- | --- |
+| `PORT` | `4517` | Port for the UI + REST + WS (one origin) |
+| `HOST` | `127.0.0.1` | Bind address — localhost only; no auth (anything that reaches the port already has local RCE) |
+| `IAGENT_AGENT_CMD` | `claude` | Agent command spawned in the PTY |
+| `IAGENT_AGENT_ARGS` | – | Comma-separated agent args (e.g. `--dangerously-skip-permissions`) |
+| `IAGENT_AGENT_CWD` | server cwd | Directory the agent starts in |
+
+e.g. `PORT=8080 IAGENT_AGENT_CMD=codex npx @isomoes/iagent`.
+
 ## Layout
 
 A Bun-workspaces monorepo:
@@ -13,6 +43,7 @@ A Bun-workspaces monorepo:
 | `@iagent/shared`  | Wire protocol + REST DTOs + config, consumed as raw TS by both sides |
 | `@iagent/server`  | PTY host + WebSocket gateway (`Bun.serve`, `Bun.Terminal`) |
 | `@iagent/client`  | Browser UI (Vite + Svelte 5 + xterm.js) |
+| `@isomoes/iagent` (`packages/cli`) | Publishable CLI — bundles the server + built client into one `npx`-able command |
 
 ## Requirements
 
@@ -123,3 +154,41 @@ bun run typecheck    # tsc --noEmit (shared/server) + svelte-check (client)
 ```sh
 bun test
 ```
+
+## Releasing & publishing
+
+One action drives everything: **push a `vX.Y.Z` git tag.** Two independent workflows fire on
+that tag:
+
+| Workflow | Trigger | Does |
+| -------- | ------- | ---- |
+| [`release.yml`](./.github/workflows/release.yml) | tag `v*` | Creates the **GitHub Release**, body = the matching `## X.Y.Z` section of [`CHANGELOG.md`](./CHANGELOG.md) (auto-generated notes if that section is missing) |
+| [`publish.yml`](./.github/workflows/publish.yml) | tag `v*` | Stamps the version onto `packages/cli`, builds it, and **publishes to npm** via OIDC trusted publishing — no `NPM_TOKEN`, provenance attached automatically |
+
+They run on the tag (not on the release event) on purpose: a Release created by `release.yml`
+with the default `GITHUB_TOKEN` would not re-trigger a `release:`-keyed workflow, so keying
+publish off the tag keeps the chain working without a long-lived PAT.
+
+The build ([`packages/cli/build.ts`](./packages/cli/build.ts)) bundles `@iagent/server` +
+`@iagent/shared` into a single Bun-target `dist/iagent.js` (prefixed with the
+`#!/usr/bin/env bun` shebang) and copies the Vite client build into `dist/public`. The
+published package therefore has **zero runtime dependencies** — only Bun itself.
+
+Cut a release:
+
+1. Add a `## X.Y.Z` section to [`CHANGELOG.md`](./CHANGELOG.md) (it becomes the release body).
+2. `git tag vX.Y.Z && git push origin vX.Y.Z`.
+
+Inspect the artifact locally first:
+
+```sh
+bun run --filter '@isomoes/iagent' build   # -> packages/cli/dist
+cd packages/cli && npm pack --dry-run       # exactly what would be published
+```
+
+**One-time npm setup** (Package → Settings → Trusted publishing on npmjs.com, after the
+first manual `npm publish` so the package exists to configure):
+
+- Repository: `isomoes/iagent`
+- Workflow: `.github/workflows/publish.yml`
+- Environment: _(leave blank)_

@@ -1,0 +1,6 @@
+# Publish only the built artifact. `files: ["dist"]` already allowlists it; this
+# file exists so npm does NOT fall back to a parent .gitignore (which ignores
+# dist/) and drop the build from the tarball. Source stays out of the package.
+src/
+build.ts
+tsconfig.json

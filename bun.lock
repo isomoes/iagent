@@ -5,6 +5,19 @@
     "": {
       "name": "iagent",
     },
+    "packages/cli": {
+      "name": "@isomoes/iagent",
+      "version": "0.1.0",
+      "bin": {
+        "iagent": "dist/iagent.js",
+      },
+      "devDependencies": {
+        "@iagent/server": "workspace:*",
+        "@iagent/shared": "workspace:*",
+        "bun-types": "1.3.14",
+        "typescript": "6.0.3",
+      },
+    },
     "packages/client": {
       "name": "@iagent/client",
       "version": "0.1.0",
@@ -58,6 +71,8 @@
     "@iagent/server": ["@iagent/server@workspace:packages/server"],
 
     "@iagent/shared": ["@iagent/shared@workspace:packages/shared"],
+
+    "@isomoes/iagent": ["@isomoes/iagent@workspace:packages/cli"],
 
     "@jridgewell/gen-mapping": ["@jridgewell/gen-mapping@0.3.13", "https://registry.npmmirror.com/@jridgewell/gen-mapping/-/gen-mapping-0.3.13.tgz", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.0", "@jridgewell/trace-mapping": "^0.3.24" } }, "sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA=="],
 

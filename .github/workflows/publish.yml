@@ -1,0 +1,68 @@
+# Publish @isomoes/iagent to npm when a vX.Y.Z tag is pushed.
+#
+# Triggered directly by the tag (not the GitHub Release event) so it needs no
+# PAT: a Release created by release.yml via the default GITHUB_TOKEN would not
+# re-trigger a `release:`-keyed workflow. release.yml runs on the same push to
+# cut the GitHub Release from CHANGELOG.md — the two are independent.
+#
+# Auth is npm "trusted publishing" via OIDC — no NPM_TOKEN secret. One-time setup
+# on npmjs.com (Package settings → Trusted publishing) must register:
+#   Repository : isomoes/iagent
+#   Workflow   : .github/workflows/publish.yml
+#   Environment: (leave blank — none is used below)
+# Do this after the package's first manual `npm publish` so it exists to configure.
+name: Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  id-token: write # required for OIDC trusted publishing + provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Bun: package manager + the build (Bun.build bundle + vite client build).
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # Node + npm: the publish itself (npm is the reference impl for OIDC
+      # trusted publishing). registry-url writes the npmjs .npmrc.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing requires npm >= 11.5.1; Node 22 ships an older npm.
+      - name: Upgrade npm
+        run: npm install --global npm@latest
+
+      - name: Install workspace
+        run: bun install --frozen-lockfile
+
+      # Gate: never publish a tree that doesn't typecheck.
+      - name: Typecheck
+        run: bun run typecheck
+
+      # Stamp the package version from the pushed tag (vX.Y.Z -> X.Y.Z).
+      - name: Set version from tag
+        working-directory: packages/cli
+        env:
+          TAG: ${{ github.ref_name }}
+        run: npm version "${TAG#v}" --no-git-tag-version --allow-same-version
+
+      # `npm publish` runs the package's prepack (bun run build.ts) to produce
+      # dist/, then publishes. No token: OIDC supplies short-lived credentials
+      # and provenance is attached automatically.
+      - name: Publish
+        working-directory: packages/cli
+        run: npm publish --provenance --access public
