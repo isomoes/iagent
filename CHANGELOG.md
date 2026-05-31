@@ -5,6 +5,11 @@ All notable changes to this project are recorded here.
 Format per entry: `<type>: <commit message> (@who) <hash>`
 Entries are grouped by package version.
 
+## 0.1.2
+
+- ci: Cut the GitHub Release only after a successful publish (@isomoes) 9925a83
+- fix: Fix publish workflow; stamp cli version with `npm pkg set` (@isomoes) 914882f
+
 ## 0.1.1
 
 - docs: Add @isomoes/iagent package README for the npm page (@isomoes) cf4bd04
