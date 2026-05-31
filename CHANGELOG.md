@@ -1,0 +1,19 @@
+# Changelog
+
+All notable changes to this project are recorded here.
+
+Format per entry: `<type>: <commit message> (@who) <hash>`
+Entries are grouped by package version.
+
+## 0.1.0
+
+- feat: Add concurrent `bun run dev` for server + client (@isomoes) e5c8d10
+- chore: Move arch.md to docs folder (@isomoes) 437e059
+- feat: Tab-leave moves focus to a non-editable element for Surfingkeys (@isomoes) c753ad3
+- feat: Scroll terminal scrollback with Shift/Ctrl+Up/Down (@isomoes) 5a76eef
+- feat: Share keyboard with page-level Vim extensions; Tab leaves, host re-entry (@isomoes) 963cf97
+- fix: Default to DOM renderer; canvas poisoning blacked out glyphs (@isomoes) cb87c30
+- fix: Fix terminal remount storm on session (re)attach (@isomoes) 49b9b47
+- security: Drop auth token for localhost-only model; size PTYs to viewport (@isomoes) c2532dc
+- feat: Implement iagent MVP — Stage 1 pure passthrough (@isomoes) e587990
+- docs: Add architecture overview (@isomoes) ee97a3b
