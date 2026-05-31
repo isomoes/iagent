@@ -9,8 +9,11 @@
   import { sessionStore } from '../lib/sessions.svelte.js';
   import type { WsStatus } from '../lib/ws-client.js';
 
-  // Inlined at build time from package.json (see vite.config.ts).
+  // Inlined at build time (see vite.config.ts): the package version for a real
+  // build, or the literal 'dev' under the Vite dev server. Show 'dev' bare; a
+  // real version gets a 'v' prefix.
   const version = __APP_VERSION__;
+  const versionLabel = version === 'dev' ? 'dev' : `v${version}`;
 
   interface Props {
     session: SessionSummary | undefined;
@@ -42,7 +45,7 @@
   {:else}
     <span class="seg">no session</span>
   {/if}
-  <span class="seg version" title="iagent version">v{version}</span>
+  <span class="seg version" title="iagent version">{versionLabel}</span>
 </footer>
 
 <style>

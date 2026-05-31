@@ -11,9 +11,11 @@ const { version } = JSON.parse(
 
 // @iagent/shared is consumed as raw TS (no build step). The Svelte/esbuild pipeline
 // transpiles it; we just make sure Vite pre-bundling doesn't try to externalize it.
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   define: {
-    __APP_VERSION__: JSON.stringify(version),
+    // 'serve' is the dev server (`vite`/`bun run dev`); show 'dev' there. Only a
+    // real `vite build` stamps the package version into the shipped bundle.
+    __APP_VERSION__: JSON.stringify(command === 'serve' ? 'dev' : version),
   },
   plugins: [svelte()],
   server: {
@@ -35,4 +37,4 @@ export default defineConfig({
     // Workspace raw-TS dep: let Vite transpile it in-tree rather than pre-bundle it.
     exclude: ['@iagent/shared'],
   },
-});
+}));
