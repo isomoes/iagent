@@ -1,6 +1,6 @@
 {
   "name": "@isomoes/iagent",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "description": "Run iagent — a web UI that hosts a terminal coding agent (Claude Code / Codex CLI) — with a single command.",
   "keywords": [

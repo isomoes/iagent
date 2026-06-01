@@ -5,6 +5,17 @@ All notable changes to this project are recorded here.
 Format per entry: `<type>: <commit message> (@who) <hash>`
 Entries are grouped by package version.
 
+## 0.1.4
+
+- docs: no code comments by default (@isomoes) c1ac0bb
+- ui: Tab toggles terminal focus; drop auto-focus & i-remap (@isomoes) 7738aee
+- feat: switch sessions with Up/Down when terminal is blurred (@isomoes) c3dce76
+- ui: pack session id next to the PTY size, not mid-bar (@isomoes) 7a47252
+- style: trim narration comments; document comment policy in CLAUDE.md (@isomoes) 588032f
+- fix: deliver SIGWINCH on resize so TUI agents repaint (@isomoes) 8bd8b35
+- docs: Add demo video link to README (@isomoes) 728d068
+- docs: Add UI screenshot to README (@isomoes) 5b3408d
+
 ## 0.1.3
 
 - feat: workspaces with path-bound, restart-resumable sessions (@isomoes) b77b0f1
