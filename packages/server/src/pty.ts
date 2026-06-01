@@ -97,7 +97,6 @@ class BunPty implements Pty {
     this.#cols = opts.cols;
     this.#rows = opts.rows;
 
-    // The terminal owns the data callback; Session subscribes via onData().
     this.#term = new Bun.Terminal({
       cols: opts.cols,
       rows: opts.rows,
@@ -119,7 +118,8 @@ class BunPty implements Pty {
     });
     this.pid = this.#proc.pid;
 
-    // Authoritative exit detection: the subprocess's exited promise.
+    // Authoritative exit detection: the subprocess's exited promise (NOT the
+    // terminal's exit callback, which reports PTY-stream lifecycle).
     void this.#proc.exited.then((code) => {
       if (this.#exited) return;
       this.#exited = true;
@@ -135,9 +135,21 @@ class BunPty implements Pty {
 
   resize(cols: number, rows: number): void {
     if (this.#closed) return;
+    if (cols === this.#cols && rows === this.#rows) return;
     this.#cols = cols;
     this.#rows = rows;
     this.#term.resize(cols, rows);
+    // Bun.Terminal updates the winsize but leaves the child without a foreground
+    // pgrp, so the kernel never sends SIGWINCH and TUI agents don't repaint until
+    // the next keystroke. Send it ourselves (setsid => pgid == pid). Remove once
+    // Bun sets the PTY foreground pgrp natively.
+    try {
+      process.kill(-this.#proc.pid, 'SIGWINCH');
+    } catch {
+      try {
+        process.kill(this.#proc.pid, 'SIGWINCH');
+      } catch {}
+    }
   }
 
   setRawMode(raw: boolean): void {
