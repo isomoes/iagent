@@ -6,6 +6,8 @@ WebSocket is the wire. See [`ARCH.md`](./ARCH.md) for the full architecture.
 
 <img width="3814" height="2144" alt="iagent UI" src="https://github.com/user-attachments/assets/68fe4a0a-782a-471e-bb4a-c26f825e15b8" />
 
+📺 Demo videos: [0.1.3](https://www.bilibili.com/video/BV1oKVd6XE3s/)
+
 ## Run it
 
 The published CLI bundles the server **and** the pre-built UI into one process that
