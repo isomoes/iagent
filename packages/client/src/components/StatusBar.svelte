@@ -76,14 +76,11 @@
   .seg.status[data-state='exited'] {
     color: #f07178;
   }
-  .seg.id {
-    margin-left: auto;
-  }
   .seg.exit {
     color: #f07178;
   }
-  /* Always far-right: pushes off the first auto-margin (the id seg) when a
-     session is shown, and right-aligns itself in the no-session case. */
+  /* Always far-right: its auto-margin absorbs all free space, right-aligning
+     itself while the id/size segments stay left-packed together. */
   .seg.version {
     margin-left: auto;
     color: #3d4654;
