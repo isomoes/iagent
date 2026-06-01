@@ -20,7 +20,6 @@
   // measure the viewport and spawn new PTYs at full size (not the 80×24 default).
   let panelEl = $state<HTMLElement | null>(null);
 
-  // Start polling the REST session list once, on mount; stop on teardown.
   $effect(() => {
     sessionStore.startPolling();
     return () => sessionStore.stopPolling();

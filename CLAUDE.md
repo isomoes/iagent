@@ -53,6 +53,10 @@ Two conventions that will bite if missed:
 - **Relative imports use `.js` extensions on `.ts` files** (`import { startServer } from './index.js'`). `moduleResolution: bundler` requires it; the file is really `.ts`.
 - `tsconfig.base.json` sets `strict`, `verbatimModuleSyntax` (type-only imports must be `import type`), `noUncheckedIndexedAccess` (indexing yields `T | undefined`), and `noEmit`. New packages extend it.
 
+## Code style
+
+Keep comments sparse and high-value. Write code clear enough to read on its own; reserve comments for the non-obvious **why** — an invariant, a gotcha, a workaround, or a design decision the code can't express (the `SIGWINCH` workaround in `pty.ts` is the bar). Don't narrate what the code does or restate the next line in prose. When a comment only describes the code, delete it and make the code clearer instead.
+
 ## Testing notes
 
 Tests live in `packages/server/test/*.test.ts` and alongside source as `packages/shared/src/*.test.ts`, using `bun:test`. `Session` and the WS path are tested with a **fake `Pty` and fake `SessionSocket`** injected via `SessionDeps` (`spawnPty`) — no real terminal spawns. When changing flow control or framing, exercise it through those fakes the same way `session-flow-control.test.ts` does.

@@ -86,7 +86,6 @@ export class Session {
   #cols: number;
   #rows: number;
 
-  // Lifecycle / bookkeeping for the REST summary.
   readonly #createdAt = Date.now();
   #lastActivity = Date.now();
   #alive = false;

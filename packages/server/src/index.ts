@@ -80,17 +80,14 @@ export function startServer(): Bun.Server<WsData> {
       async fetch(req, srv) {
         const url = new URL(req.url);
 
-        // WebSocket data path: /ws/:sessionId
         if (url.pathname.startsWith('/ws/')) {
           // Returns undefined when the upgrade succeeded (Bun takes over the socket).
           return upgradeWs(req, srv, mgr, cfg);
         }
 
-        // REST management path: /api/sessions...
         const rest = await handleRest(req, mgr, cfg);
         if (rest) return rest;
 
-        // Lightweight liveness probe.
         if (url.pathname === '/health') {
           return new Response('ok', { status: 200 });
         }

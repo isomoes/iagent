@@ -141,11 +141,10 @@ export class WsClient {
     }
     const frame = decodeFrame(new Uint8Array(data));
     if (frame.kind === 'data') {
-      // DOWN-data: render, and ACK the cumulative bytes ONCE rendered.
       const n = frame.bytes.length;
       this.ev.onData(frame.bytes);
-      // The render-callback path lives in TerminalView (term.write callback);
-      // it calls noteRendered(n). See onData consumer. We do NOT ack here.
+      // We do NOT ack here: TerminalView's term.write callback calls
+      // noteRendered(n), so we ACK only bytes that actually rendered.
       void n;
       return;
     }

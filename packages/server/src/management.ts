@@ -48,13 +48,11 @@ export async function handleRest(
 
   const principal = principalFor(req);
 
-  // /api/sessions  and  /api/sessions/:id
   const rest = url.pathname.slice('/api/'.length);
   const parts = rest.split('/').filter((p) => p.length > 0);
 
   if (parts[0] !== 'sessions') return err('not found', 404);
 
-  // Collection: /api/sessions
   if (parts.length === 1) {
     if (req.method === 'GET') {
       const sessions = mgr.list(principal);
@@ -80,7 +78,6 @@ export async function handleRest(
     return err('method not allowed', 405);
   }
 
-  // Item: /api/sessions/:id
   if (parts.length === 2) {
     const id = parts[1]!;
     if (req.method === 'GET') {

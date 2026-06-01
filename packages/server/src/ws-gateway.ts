@@ -150,7 +150,6 @@ export function makeWebSocketHandler(mgr: SessionManager, _cfg: ServerConfig) {
     open(ws: ServerWebSocket<WsData>): void {
       // Binary frames as Uint8Array (avoids a Buffer copy at the boundary).
       ws.binaryType = 'uint8array';
-      // Await the client's attach control frame before streaming anything.
     },
 
     message(ws: ServerWebSocket<WsData>, raw: string | Buffer | Uint8Array): void {

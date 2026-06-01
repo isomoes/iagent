@@ -214,7 +214,6 @@ export class SessionManager {
     let guard = this.#sessions.size + 1; // bound the loop
     let over = this.totalBufferedBytes - this.#cfg.totalRingBytes;
     while (over > 0 && guard-- > 0) {
-      // Trim from the least-recently-active session that still holds scrollback.
       let victim: Session | null = null;
       for (const s of this.#sessions.values()) {
         if (s.bufferedBytes === 0) continue;

@@ -285,7 +285,7 @@ class XtermTerminal implements TerminalHandle {
     // screen TUIs) keeps no scrollback, so there scrolling is a harmless no-op.
     term.attachCustomKeyEventHandler((e) => {
       if (e.type === 'keydown' && handleScrollback(term, e)) {
-        e.preventDefault(); // we handled it; don't let xterm encode a key byte
+        e.preventDefault();
         return false; // do NOT forward to the PTY
       }
       if (
@@ -296,7 +296,7 @@ class XtermTerminal implements TerminalHandle {
         !e.altKey &&
         !e.metaKey
       ) {
-        e.preventDefault(); // suppress native focus traversal
+        e.preventDefault();
         if (this.leaveHandler) this.leaveHandler();
         else term.blur();
         return false; // do NOT forward Tab to the PTY
@@ -308,14 +308,10 @@ class XtermTerminal implements TerminalHandle {
     this.fitAddon = fitAddon;
     this.serializeAddon = serializeAddon;
 
-    // Renderer selection. The DOM renderer is the DEFAULT (see
-    // resolveRendererMode): real <span> text that no canvas-poisoning tool can
-    // turn into black blocks, and fast enough for passthrough TUI. WebGL/Canvas
-    // stay opt-in via `?renderer=` for GPU frame-rendering (ARCH §Performance
-    // #1); both rasterize glyphs through a 2D-canvas atlas, so `?renderer=auto`
-    // probes for canvas tampering (privacy extension, Brave farbling, Chrome
-    // fingerprint-defense flag) and takes WebGL only when the canvas is clean.
-    // The WebGL/Canvas addons must load AFTER open().
+    // Renderer selection (see resolveRendererMode / ARCH §Performance #1). DOM
+    // is the default; WebGL/Canvas are opt-in via `?renderer=`, and `?renderer=
+    // auto` takes WebGL only when canvasReadbackTampered() reports a clean
+    // canvas. The WebGL/Canvas addons must load AFTER open().
     const mode = resolveRendererMode();
     if (mode === 'webgl') {
       this.tryEnableWebgl();
@@ -457,7 +453,6 @@ class XtermTerminal implements TerminalHandle {
   }
 
   write(bytes: Uint8Array, onRendered?: () => void): void {
-    // Opaque bytes straight into xterm; render-callback drives the ACK loop.
     this.term?.write(bytes, onRendered);
   }
 
@@ -494,8 +489,6 @@ class XtermTerminal implements TerminalHandle {
   }
 
   onInput(cb: (bytes: Uint8Array) => void): void {
-    // xterm gives us a string per keystroke/paste; encode to UTF-8 bytes and
-    // hand the raw bytes to the wire (server writes them to pty stdin).
     // NOTE (DEFERRED): local-echo / typeahead would render the keystroke in
     // dimmed text here before the server round-trip and reconcile against real
     // output (Mosh-style). Not implemented — pure passthrough for now.

@@ -76,7 +76,6 @@ export class RingBuffer {
     const grown = new Uint8Array(next);
     // Re-linearize the existing data into the new buffer.
     this.#copyOut(grown, 0, this.#size);
-    grown.fill(0, this.#size); // not strictly necessary; keeps it tidy
     this.#buf = grown;
     this.#start = 0;
   }
