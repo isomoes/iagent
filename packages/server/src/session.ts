@@ -152,6 +152,7 @@ export class Session {
       id: this.id,
       title: this.#spec.title,
       agent: this.#spec.agent,
+      cwd: this.#spec.cwd,
       cols: this.#cols,
       rows: this.#rows,
       createdAt: this.#createdAt,

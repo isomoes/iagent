@@ -17,6 +17,7 @@
   import { WsClient, type WsStatus } from '../lib/ws-client.js';
   import { sessionWsUrl } from '../lib/config.js';
   import { sessionStore } from '../lib/sessions.svelte.js';
+  import { settingsStore } from '../lib/settings.svelte.js';
 
   interface Props {
     sessionId: string;
@@ -45,7 +46,10 @@
     // the server's authoritative size from the 'attached' frame.
     let attached = false;
 
-    const term: TerminalHandle = createTerminal();
+    // Open at the persisted font size (read untracked so this effect keeps
+    // depending ONLY on host + sessionId; later changes are handled by the
+    // nested font-size effect below, not by remounting the terminal).
+    const term: TerminalHandle = createTerminal(untrack(() => settingsStore.terminalFontSize));
     term.mount(el);
 
     // Re-entry affordance (ARCH §Focus & browser keyboard extensions). xterm
@@ -140,6 +144,24 @@
       }
     });
     ro.observe(el);
+
+    // React to the persisted terminal font size. Nested so it lives and dies
+    // with this terminal and tracks ONLY settingsStore.terminalFontSize (the
+    // parent effect stays pinned to host + sessionId). On the initial run the
+    // size already matches (createTerminal opened at it) and we are not yet
+    // attached, so it no-ops; a later change re-fits the grid and sends one
+    // debounced resize so the server PTY follows the new cell size.
+    $effect(() => {
+      const px = settingsStore.terminalFontSize;
+      if (disposed) return;
+      term.setFontSize(px);
+      if (!attached) return;
+      const dims = term.fit();
+      if (dims.cols > 0 && dims.rows > 0) {
+        if (resizeTimer !== null) clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => ws.sendResize(dims.cols, dims.rows), RESIZE_DEBOUNCE_MS);
+      }
+    });
 
     // connect() synchronously emits onStatus -> sessionStore.setStatus, which
     // reads AND writes the statusMap $state. Run it untracked so this effect

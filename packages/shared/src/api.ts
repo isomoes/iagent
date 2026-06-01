@@ -16,6 +16,12 @@ export interface SessionSummary {
   id: string;
   title: string;
   agent: AgentKind;
+  /**
+   * Absolute working directory the agent PTY was spawned in (resolved + verified
+   * server-side). The client groups sessions into workspaces by their bound id
+   * but can fall back to matching this path; also surfaced in the UI.
+   */
+  cwd: string;
   cols: number;
   rows: number;
   /** epoch ms */
@@ -41,6 +47,20 @@ export interface CreateSessionReq {
   cmd?: string;
   args?: string[];
   env?: Record<string, string>;
+  /**
+   * Client-supplied session id (a UUID) used to RESUME a session the server no
+   * longer holds — e.g. after a server restart. Omit for new sessions: the
+   * server generates one. Must be a valid UUID and not already live, else 400.
+   * Pairs with `resume`; on its own it just pins the new session's id.
+   */
+  id?: string;
+  /**
+   * Resume the agent's prior conversation instead of starting fresh. For the
+   * 'claude' agent the server spawns `claude --resume <id>` (Claude persists its
+   * transcript per-cwd, keyed by the session id we pinned at creation via
+   * `--session-id`); for other agents it is a plain re-spawn in `cwd`.
+   */
+  resume?: boolean;
 }
 
 /** POST /api/sessions response. */

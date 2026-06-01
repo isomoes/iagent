@@ -20,6 +20,9 @@ import type { AgentKind, CreateSessionReq, ServerConfig, SessionSummary } from '
 import { Session, type AgentSpec, type SessionDeps } from './session.js';
 import type { Principal } from './auth.js';
 import { newSessionId } from './ids.js';
+import { resolve } from 'node:path';
+import { statSync } from 'node:fs';
+import { homedir } from 'node:os';
 
 const DEFAULT_COLS = 80;
 const DEFAULT_ROWS = 24;
@@ -31,6 +34,69 @@ export class SessionLimitError extends Error {
     super(message);
     this.name = 'SessionLimitError';
   }
+}
+
+/** A bad CreateSessionReq (e.g. a cwd that isn't an existing directory) -> 400. */
+export class SessionRequestError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SessionRequestError';
+  }
+}
+
+/** RFC-4122-shaped UUID (what crypto.randomUUID emits + what claude --session-id wants). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** claude flags that already manage the conversation/resume lifecycle. */
+const CLAUDE_SESSION_FLAGS = new Set([
+  '-r',
+  '--resume',
+  '-c',
+  '--continue',
+  '--session-id',
+  '--fork-session',
+]);
+
+/**
+ * Make claude sessions resumable across a server restart by pinning the
+ * conversation to the iagent session id: a NEW session gets `--session-id <id>`
+ * (claude stores its transcript under that id), and a RESUME gets `--resume
+ * <id>` (claude reloads it). No-op for non-claude agents (nothing to resume) and
+ * skipped entirely if the configured args already drive these flags.
+ */
+function resolveAgentArgs(
+  agent: AgentKind,
+  baseArgs: string[],
+  id: string,
+  resume: boolean,
+): string[] {
+  if (agent !== 'claude') return baseArgs;
+  if (baseArgs.some((a) => CLAUDE_SESSION_FLAGS.has(a))) return baseArgs;
+  return resume ? [...baseArgs, '--resume', id] : [...baseArgs, '--session-id', id];
+}
+
+/**
+ * Resolve a workspace/session cwd to a canonical absolute path and verify it is
+ * an existing directory. Expands a leading `~`/`~/` (shells do this; spawn does
+ * not) and resolves relatives against the server's startup dir (process.cwd()),
+ * preserving the historical default of cwd '.'. Throws SessionRequestError so a
+ * mistyped workspace path surfaces as a clean 400, not a cryptic spawn ENOENT.
+ */
+function resolveCwd(input: string): string {
+  let p = input.trim() || '.';
+  if (p === '~') p = homedir();
+  else if (p.startsWith('~/')) p = resolve(homedir(), p.slice(2));
+  const abs = resolve(p);
+  let stat: ReturnType<typeof statSync>;
+  try {
+    stat = statSync(abs);
+  } catch {
+    throw new SessionRequestError(`working directory does not exist: ${abs}`);
+  }
+  if (!stat.isDirectory()) {
+    throw new SessionRequestError(`not a directory: ${abs}`);
+  }
+  return abs;
 }
 
 export class SessionManager {
@@ -50,22 +116,22 @@ export class SessionManager {
    * Resolve a CreateSessionReq into a full AgentSpec, merging request overrides
    * over the configured agent defaults. 'shell' is the dev fallback ($SHELL).
    */
-  #resolveSpec(req: CreateSessionReq): AgentSpec {
+  #resolveSpec(req: CreateSessionReq, id: string): AgentSpec {
     const agent: AgentKind = req.agent ?? (this.#cfg.agentCmd === 'claude' ? 'claude' : this.#cfg.agentCmd);
 
     // Default command from config; 'shell' agent or an explicit cmd override it.
     let cmd = req.cmd ?? this.#cfg.agentCmd;
-    let args = req.args ?? this.#cfg.agentArgs;
+    let baseArgs = req.args ?? this.#cfg.agentArgs;
     if (req.agent === 'shell' && req.cmd === undefined) {
       cmd = (this.#deps as { shell?: string }).shell ?? process.env.SHELL ?? '/bin/sh';
-      args = req.args ?? [];
+      baseArgs = req.args ?? [];
     }
 
     return {
       agent,
       cmd,
-      args,
-      cwd: req.cwd ?? this.#cfg.agentCwd,
+      args: resolveAgentArgs(agent, baseArgs, id, req.resume === true),
+      cwd: resolveCwd(req.cwd ?? this.#cfg.agentCwd),
       env: { ...process.env, ...this.#cfg.agentEnv, ...(req.env ?? {}) } as Record<string, string>,
       cols: req.cols && req.cols > 0 ? req.cols : DEFAULT_COLS,
       rows: req.rows && req.rows > 0 ? req.rows : DEFAULT_ROWS,
@@ -73,13 +139,26 @@ export class SessionManager {
     };
   }
 
+  /**
+   * Validate a client-supplied session id (for resume) or mint a fresh one.
+   * A provided id must be a UUID and not already live — so a resume targets a
+   * known-shaped, non-colliding id (the single-user/localhost owner is trusted,
+   * but the format + uniqueness checks still gate it).
+   */
+  #resolveId(reqId: string | undefined): string {
+    if (reqId === undefined) return newSessionId();
+    if (!UUID_RE.test(reqId)) throw new SessionRequestError(`invalid session id: ${reqId}`);
+    if (this.#sessions.has(reqId)) throw new SessionRequestError(`session already exists: ${reqId}`);
+    return reqId;
+  }
+
   /** Create + start a session owned by `owner`. Throws on the concurrency cap. */
   create(req: CreateSessionReq, owner: Principal): Session {
     if (this.#sessions.size >= this.#cfg.maxSessions) {
       throw new SessionLimitError(`max concurrent sessions reached (${this.#cfg.maxSessions})`);
     }
-    const spec = this.#resolveSpec(req);
-    const id = newSessionId();
+    const id = this.#resolveId(req.id);
+    const spec = this.#resolveSpec(req, id);
     const session = new Session(id, owner, spec, this.#cfg, this.#deps);
     this.#sessions.set(id, session);
     session.start();

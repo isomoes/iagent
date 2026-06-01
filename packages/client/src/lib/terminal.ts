@@ -40,6 +40,11 @@ export interface TerminalHandle {
   /** Open xterm into `el`, load addons (WebGL w/ canvas fallback). */
   mount(el: HTMLElement): void;
   /**
+   * Change the rendered font size (px). The caller is responsible for re-fitting
+   * afterwards (the grid changes), so a single resize frame covers the relayout.
+   */
+  setFontSize(px: number): void;
+  /**
    * Write opaque PTY bytes. `onRendered` fires once xterm has rendered them,
    * feeding the WsClient ACK loop. Bytes are NEVER decoded here.
    */
@@ -222,6 +227,8 @@ const TERMINAL_OPTIONS: ITerminalOptions = {
 };
 
 class XtermTerminal implements TerminalHandle {
+  /** Font size (px) applied at mount; null = use the TERMINAL_OPTIONS default. */
+  private readonly initialFontSize: number | null;
   private term: Terminal | null = null;
   private fitAddon: FitAddon | null = null;
   private webgl: WebglAddon | null = null;
@@ -236,10 +243,19 @@ class XtermTerminal implements TerminalHandle {
   private atlasRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private atlasRefreshDeadline = 0;
 
+  constructor(initialFontSize?: number) {
+    this.initialFontSize =
+      typeof initialFontSize === 'number' && initialFontSize > 0 ? initialFontSize : null;
+  }
+
   mount(el: HTMLElement): void {
     if (this.term) throw new Error('TerminalHandle.mount: already mounted');
 
-    const term = new Terminal(TERMINAL_OPTIONS);
+    const term = new Terminal(
+      this.initialFontSize == null
+        ? TERMINAL_OPTIONS
+        : { ...TERMINAL_OPTIONS, fontSize: this.initialFontSize },
+    );
     const fitAddon = new FitAddon();
     const serializeAddon = new SerializeAddon();
 
@@ -465,6 +481,13 @@ class XtermTerminal implements TerminalHandle {
     if (cols > 0 && rows > 0) this.term?.resize(cols, rows);
   }
 
+  setFontSize(px: number): void {
+    const term = this.term;
+    if (!term || !(px > 0) || term.options.fontSize === px) return;
+    // xterm relays out the cell grid on the next fit(); the caller re-fits.
+    term.options.fontSize = px;
+  }
+
   size(): TerminalDimensions {
     const term = this.term;
     return { cols: term?.cols ?? 0, rows: term?.rows ?? 0 };
@@ -538,9 +561,13 @@ class XtermTerminal implements TerminalHandle {
   }
 }
 
-/** Create a fresh terminal wrapper. Call mount(el) to open it. */
-export function createTerminal(): TerminalHandle {
-  return new XtermTerminal();
+/**
+ * Create a fresh terminal wrapper. Call mount(el) to open it. Pass `fontSize`
+ * (px) to open at a non-default size (the client's persisted setting); omit to
+ * use the TERMINAL_OPTIONS default.
+ */
+export function createTerminal(fontSize?: number): TerminalHandle {
+  return new XtermTerminal(fontSize);
 }
 
 // Mirrors the .terminal-host padding (see TerminalView.svelte) so the offscreen
@@ -557,10 +584,16 @@ const HOST_PADDING_CSS = '6px 8px';
  *
  * Used to spawn the server PTY at the real viewport size from the start, rather
  * than booting the agent at the 80×24 server default and resizing after attach
- * (which makes the agent's first paint tiny). Returns null if it can't measure;
- * callers should fall back to the server default.
+ * (which makes the agent's first paint tiny). Pass `fontSize` so the measured
+ * grid matches the client's configured terminal font (a bigger font fits fewer
+ * cells); omit to use the TERMINAL_OPTIONS default. Returns null if it can't
+ * measure; callers should fall back to the server default.
  */
-export function measureGrid(widthPx: number, heightPx: number): TerminalDimensions | null {
+export function measureGrid(
+  widthPx: number,
+  heightPx: number,
+  fontSize?: number,
+): TerminalDimensions | null {
   if (typeof document === 'undefined') return null;
   if (!(widthPx > 0) || !(heightPx > 0)) return null;
 
@@ -570,7 +603,11 @@ export function measureGrid(widthPx: number, heightPx: number): TerminalDimensio
     `width:${Math.floor(widthPx)}px;height:${Math.floor(heightPx)}px;padding:${HOST_PADDING_CSS};`;
   document.body.appendChild(host);
 
-  const term = new Terminal(TERMINAL_OPTIONS);
+  const term = new Terminal(
+    typeof fontSize === 'number' && fontSize > 0
+      ? { ...TERMINAL_OPTIONS, fontSize }
+      : TERMINAL_OPTIONS,
+  );
   const fit = new FitAddon();
   term.loadAddon(fit);
   let dims: TerminalDimensions | null = null;

@@ -18,7 +18,7 @@ import type {
   ListSessionsRes,
   ServerConfig,
 } from '@iagent/shared';
-import { SessionLimitError, type SessionManager } from './session-manager.js';
+import { SessionLimitError, SessionRequestError, type SessionManager } from './session-manager.js';
 import { checkOrigin, principalFor } from './auth.js';
 
 function json(body: unknown, status = 200): Response {
@@ -72,6 +72,7 @@ export async function handleRest(
         const session = mgr.create(body, principal);
         return json({ session: session.summary } satisfies CreateSessionRes, 201);
       } catch (e) {
+        if (e instanceof SessionRequestError) return err(e.message, 400);
         if (e instanceof SessionLimitError) return err(e.message, 429);
         return err(`failed to create session: ${(e as Error).message}`, 500);
       }

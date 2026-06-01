@@ -116,6 +116,19 @@ PTY lifecycle is **independent of the socket** (tmux-like). Closing the tab does
 - Reconnect uses exponential backoff, capped (~10–15 tries / 2–5 min).
 - Start in-memory; keep the `SessionManager` interface durable-ready (tmux/persisted buffer later).
 
+**Cross-restart resume.** The PTY is a child of the server process, so a server restart kills every
+agent and empties the in-memory `SessionManager` — the live socket/ring cannot survive it. What *can*
+survive is the **conversation**: Claude Code persists its transcript to disk keyed by a session id, so
+iagent makes its own session id (already a `crypto.randomUUID()`) *be* that key. A new `claude` session
+is spawned with `--session-id <id>`; resuming re-creates a session with the **same id + workspace cwd**
+and spawns `claude --resume <id>`, and Claude re-renders the prior conversation. The resumable registry
+(session id → workspace path/agent/title) lives **client-side in localStorage** (see the workspace
+store) — consistent with single-user/localhost and untouched by a server restart; the server stays
+stateless, only accepting a client-supplied UUID on create (validated: well-formed + not already live)
+and injecting the resume flag. Non-`claude` agents have no transcript, so "resume" is a plain re-spawn
+in the cwd. Terminal scrollback from before the restart is *not* restored (the ring was in-memory);
+Claude's own re-render is the recovery path.
+
 ## Performance (design defaults)
 
 Lag comes from rendering, producer-overwhelm, and input latency — rarely the network. Fixes:

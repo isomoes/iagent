@@ -7,10 +7,12 @@
 // state stays current. Mutations go through @iagent/shared-typed management.ts.
 // ============================================================================
 
-import type { CreateSessionReq, SessionSummary } from '@iagent/shared';
+import type { AgentKind, CreateSessionReq, SessionSummary } from '@iagent/shared';
 import type { WsStatus } from './ws-client.js';
-import { createSession, killSession, listSessions } from './management.js';
+import { ApiError, createSession, killSession, listSessions } from './management.js';
 import { measureGrid } from './terminal.js';
+import { settingsStore } from './settings.svelte.js';
+import { workspaceStore } from './workspaces.svelte.js';
 
 const POLL_INTERVAL_MS = 4000;
 
@@ -59,6 +61,9 @@ class SessionStore {
       const next = await listSessions();
       this.sessions = next;
       this.error = null;
+      // Keep workspace bindings in sync with the live set (prune dead, adopt
+      // cwd-matching orphans) so localStorage doesn't accrue stale entries.
+      workspaceStore.reconcile(next);
       // Keep focus valid; if the active session vanished, fall back to first.
       if (this.activeId && !next.some((s) => s.id === this.activeId)) {
         this.activeId = next[0]?.id ?? null;
@@ -88,7 +93,7 @@ class SessionStore {
     const statusBar = host.querySelector('.status-bar') as HTMLElement | null;
     const width = host.clientWidth;
     const height = host.clientHeight - (statusBar?.offsetHeight ?? 0);
-    return measureGrid(width, height);
+    return measureGrid(width, height, settingsStore.terminalFontSize);
   }
 
   /** Create a session (REST POST), select it, and return its summary. */
@@ -113,17 +118,54 @@ class SessionStore {
     }
   }
 
-  /** Kill a session (REST DELETE) and drop it from the list. */
+  /**
+   * Resume a session the server no longer holds (e.g. after a restart): re-POST
+   * with the SAME id + workspace cwd and `resume: true` so the server spawns
+   * `claude --resume <id>`, restoring the conversation. Focuses it on success.
+   */
+  async resume(
+    id: string,
+    opts: { cwd: string; agent?: AgentKind; title?: string },
+  ): Promise<SessionSummary | null> {
+    this.loading = true;
+    try {
+      const req: CreateSessionReq = { id, resume: true, cwd: opts.cwd };
+      if (opts.agent) req.agent = opts.agent;
+      if (opts.title) req.title = opts.title;
+      const grid = this.measureInitialGrid();
+      if (grid) {
+        req.cols = grid.cols;
+        req.rows = grid.rows;
+      }
+      const session = await createSession(req);
+      this.sessions = this.sessions.some((s) => s.id === session.id)
+        ? this.sessions.map((s) => (s.id === session.id ? session : s))
+        : [...this.sessions, session];
+      this.activeId = session.id; // focus it -> TerminalView opens its WS.
+      this.error = null;
+      return session;
+    } catch (e) {
+      this.error = (e as Error).message;
+      return null;
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  /** Kill a session (REST DELETE), forget its client record, and drop it. */
   async kill(id: string): Promise<void> {
     try {
       await killSession(id);
     } catch (e) {
-      this.error = (e as Error).message;
+      // A session the server already forgot (e.g. after a restart) 404s — that
+      // is "already gone" for our purposes, so only surface other errors.
+      if (!(e instanceof ApiError && e.status === 404)) this.error = (e as Error).message;
     }
     this.sessions = this.sessions.filter((s) => s.id !== id);
     const { [id]: _removed, ...rest } = this.statusMap;
     void _removed;
     this.statusMap = rest;
+    workspaceStore.forgetSession(id);
     if (this.activeId === id) {
       this.activeId = this.sessions[0]?.id ?? null;
     }
