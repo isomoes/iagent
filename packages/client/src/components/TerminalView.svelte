@@ -54,13 +54,13 @@
 
     // Re-entry affordance (ARCH §Focus & browser keyboard extensions). xterm
     // takes input through a hidden, zero-area helper <textarea> that page-level
-    // Vim extensions (Surfingkeys/Vimium/Tridactyl) cannot see, so after `Esc`
-    // blurs it their `f`/`i`/Tab have nothing to land on. The host is a real,
-    // visible, focusable element (tabindex/role in markup) — when it receives
-    // focus (an `f` hint's .focus(), native Tab) or a click lands on its padding,
-    // we forward into xterm via term.focus(). Attached as DOM listeners (not
-    // markup handlers) so they live and die with the terminal, add no reactive
-    // state to this effect, and never decode/swallow keys.
+    // Vim extensions (Surfingkeys/Vimium/Tridactyl) cannot see, so when it is
+    // blurred their `f` hint and native Tab have nothing to land on. The host is
+    // a real, visible, focusable element (tabindex/role in markup) — when it
+    // receives focus (native Tab toggling back in, an `f` hint's .focus()) or a
+    // click lands on its padding, we forward into xterm via term.focus().
+    // Attached as DOM listeners (not markup handlers) so they live and die with
+    // the terminal, add no reactive state to this effect, and never decode/swallow keys.
     const refocusTerminal = (): void => {
       if (!disposed) term.focus();
     };
@@ -92,12 +92,15 @@
         term.applySize(msg.cols, msg.rows);
         attached = true;
         exitInfo = null;
-        term.focus();
-        // ...and ONLY THEN, as the focused client, fit to our real container and
-        // issue a (debounced) resize if it differs from the PTY's current size.
-        // Without this a freshly-created PTY (spawned at 80x24) stays locked at
-        // 80x24 inside a larger viewport, since the ResizeObserver does not
-        // re-fire on a grid resize (ARCH §Wire protocol: fit, then resize).
+        // We deliberately do NOT auto-focus: a freshly attached session leaves
+        // the keyboard with the page-level Vim extension. Tab (or click / an `f`
+        // hint) is the explicit gesture to enter the terminal (ARCH §Focus).
+        //
+        // As the focused client, fit to our real container and issue a (debounced)
+        // resize if it differs from the PTY's current size. Without this a freshly-
+        // created PTY (spawned at 80x24) stays locked at 80x24 inside a larger
+        // viewport, since the ResizeObserver does not re-fire on a grid resize
+        // (ARCH §Wire protocol: fit, then resize).
         const dims = term.fit();
         if (dims.cols > 0 && dims.rows > 0 && (dims.cols !== msg.cols || dims.rows !== msg.rows)) {
           if (resizeTimer !== null) clearTimeout(resizeTimer);
@@ -188,10 +191,11 @@
 </script>
 
 <div class="terminal-view" bind:this={viewEl} tabindex="-1">
-  <!-- tabindex + role make the host a real, hint-discoverable focus target so a
-       page-level Vim extension's `f` and native Tab can return focus to the
-       terminal after Esc (ARCH §Focus & browser keyboard extensions). The
-       focus/click forwarding into xterm is wired in the $effect above. -->
+  <!-- tabindex + role make the host a real, hint-discoverable focus target so
+       native Tab (the toggle back in) and a page-level Vim extension's `f` can
+       return focus to the terminal when it is blurred (ARCH §Focus & browser
+       keyboard extensions). The focus/click forwarding into xterm is wired in
+       the $effect above. -->
   <div
     class="terminal-host"
     bind:this={host}

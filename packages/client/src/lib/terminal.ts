@@ -266,13 +266,14 @@ class XtermTerminal implements TerminalHandle {
 
     // Keyboard-ownership policy (ARCH §Focus & browser keyboard extensions).
     // While the terminal is focused it owns the WHOLE keyboard — Esc included,
-    // so the agent (Claude Code) gets Esc to interrupt/dismiss. The deliberate
-    // "leave the terminal" gesture is plain Tab: we intercept it HERE, before
-    // xterm encodes it as a \t byte, and hand off via the leave handler — which
-    // moves focus to a non-editable element so a page-level Vim extension
+    // so the agent (Claude Code) gets Esc to interrupt/dismiss. Plain Tab is the
+    // focus TOGGLE: when focused, it leaves the terminal — we intercept it HERE,
+    // before xterm encodes it as a \t byte, and hand off via the leave handler,
+    // which moves focus to a non-editable element so a page-level Vim extension
     // (Surfingkeys) drops out of insert mode AT ONCE (a bare blur leaves it in
-    // insert mode, wasting the first key; ARCH §Focus). The extension can then
-    // return focus via `f` / `i` / native Tab. Cost: the agent no longer
+    // insert mode, wasting the first key; ARCH §Focus). When blurred, the next
+    // native Tab lands on the visible host (its focus handler calls term.focus())
+    // and toggles back in — no app-wide key capture. Cost: the agent no longer
     // receives a literal Tab while focused. Shift+Tab is deliberately NOT taken
     // (it stays Claude Code's mode-cycle); every other key, Esc among them,
     // passes straight through. Returning true = let xterm handle the key.
