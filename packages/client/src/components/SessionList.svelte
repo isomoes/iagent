@@ -155,6 +155,40 @@
     if (r.live) await sessionStore.kill(r.id);
     else workspaceStore.forgetSession(r.id);
   }
+
+  function isTextEntryFocused(): boolean {
+    const el = document.activeElement as HTMLElement | null;
+    if (!el) return false;
+    const tag = el.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+  }
+
+  // Up/Down switch sessions only while blurred. Bubble-phase + the defaultPrevented
+  // / text-entry bails keep the rule from ARCH §Focus: never globally swallow keys
+  // — a focused agent and a blurred page Vim extension both keep their arrows.
+  function onArrowSwitch(e: KeyboardEvent): void {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+    if (e.defaultPrevented || showSettings || isTextEntryFocused()) return;
+
+    const rows = groups
+      .filter((g) => !(g.ws && workspaceStore.isCollapsed(g.ws.id)))
+      .flatMap((g) => g.rows);
+    if (rows.length < 2) return;
+
+    const step = e.key === 'ArrowDown' ? 1 : -1;
+    const cur = rows.findIndex((r) => r.id === activeId);
+    const next = cur === -1 ? (step === 1 ? 0 : rows.length - 1) : (cur + step + rows.length) % rows.length;
+    const target = rows[next];
+    if (!target) return;
+    e.preventDefault();
+    void onSelect(target);
+  }
+
+  $effect(() => {
+    window.addEventListener('keydown', onArrowSwitch);
+    return () => window.removeEventListener('keydown', onArrowSwitch);
+  });
 </script>
 
 {#if settingsStore.sidebarCollapsed}
