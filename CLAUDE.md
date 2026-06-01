@@ -55,7 +55,7 @@ Two conventions that will bite if missed:
 
 ## Code style
 
-Keep comments sparse and high-value. Write code clear enough to read on its own; reserve comments for the non-obvious **why** — an invariant, a gotcha, a workaround, or a design decision the code can't express (the `SIGWINCH` workaround in `pty.ts` is the bar). Don't narrate what the code does or restate the next line in prose. When a comment only describes the code, delete it and make the code clearer instead.
+No code comments by default — even when asked. Make code self-explanatory through names, types, and structure. The only exception is a non-obvious **why** the code can't express — an invariant, gotcha, workaround, or design decision (the `SIGWINCH` workaround in `pty.ts` is the bar).
 
 ## Testing notes
 
