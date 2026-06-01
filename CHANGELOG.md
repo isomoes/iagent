@@ -5,6 +5,15 @@ All notable changes to this project are recorded here.
 Format per entry: `<type>: <commit message> (@who) <hash>`
 Entries are grouped by package version.
 
+## 0.1.3
+
+- feat: workspaces with path-bound, restart-resumable sessions (@isomoes) b77b0f1
+- docs: simple CLAUDE.md (@isomoes) 5d0cadc
+- feat: Fall back to a random free port when the default is busy (@isomoes) 8b498b7
+- docs: Add CLAUDE.md with build commands + architecture guide (@isomoes) c5bdda9
+- feat: Show 'dev' as the status-bar version under the dev server (@isomoes) a3db4fa
+- feat: Show the iagent version in the status bar (@isomoes) 712faf8
+
 ## 0.1.2
 
 - ci: Cut the GitHub Release only after a successful publish (@isomoes) 9925a83
